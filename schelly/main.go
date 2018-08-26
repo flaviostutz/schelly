@@ -8,7 +8,6 @@ import (
 	"os"
 	"github.com/Sirupsen/logrus"
 	"github.com/robfig/cron"
-    // "go-plugins-helpers/volume"
 )
 
 const VERSION = "1.0.0-beta"
@@ -34,7 +33,7 @@ type Options struct {
 var options = new(Options)
 
 func main() {
-	backupName            := flag.String("backup-name", "", "Backup name. Used during webhook calls as /[name]. Required.")
+	backupName            := flag.String("backup-name", "", "Backup name. Required.")
 	backupCron            := flag.String("backup-cron-string", "", "Cron string used for triggering new backups. If not defined it will be auto generated based on retention configs")
 	webhookUrl            := flag.String("webhook-url", "", "Base webhook URL for calling backup operations (create/delete backups)")
 	webhookHeaders        := flag.String("webhook-headers", "", "key=value comma separated list of headers to be sent on backup backend calls")

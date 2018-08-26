@@ -18,12 +18,70 @@ Schelly is a backup tool focused on the scheduling stuff. You can use any backup
 * RETENTION_YEARLY - retention config for years
 format "header1=contents1,header2=contents2"
 * WEBHOOK_BODY - custom data to be sent as body for webhook calls to backup backends
-* GRACE_TIME_SECONDS - when trying to run a new backup task, if a previous task is still running because it didn't finish yet, check for this parameter. if time elapsed for the running task is greater than this parameter, try to cancel it by emitting a DELETE webhook and start the new task, else mark the new task as SKIPPED and keep the running task as is.
+* GRACE\_TIME\_SECONDS - when trying to run a new backup task, if a previous task is still running because it didn't finish yet, check for this parameter. if time elapsed for the running task is greater than this parameter, try to cancel it by emitting a DELETE webhook and start the new task, else mark the new task as SKIPPED and keep the running task as is.
+
+# Webhook spec
+
+The webhook server must expose the following REST endpoints:
+
+  - ```POST {webhook-url}```
+    - Invoked when Schelly wants to trigger a new backup
+    - Request body: json ```{webhook-create-body}```
+    - Request header: ```{webhook-headers}```
+    - Response body: json 
+     
+      ```
+        {
+           id:{alphanumeric-backup-id},
+           status:{backup-status}
+           message:{backend-message}
+        }
+      ```
+      - status must be one of:
+          - 'pending' - backup is not finished yet
+          - 'canceled' - backup was canceled
+          - 'success' - backup has completed successfuly
+          - 'error' - there was an error on backup
+      
+    - Status code 201 if created successfuly
+
+  - ```GET {webhook-url}/{backup-id}```
+    - Invoked when Schelly wants to query a specific backup instance
+    - Request header: ```{webhook-headers}```
+    - Response body: json
+    
+       ```
+         {
+           id:{id},
+           status:{backup-status},
+           message:{backend message}
+         }
+       ```
+    - Status code: 200 if found, 404 if not found
+
+  - ```DELETE {webhook-url}/{backup-id}```
+    - Invoked when Schelly wants to trigger a new backup
+    - Request body: json ```{webhook-delete-body}```
+    - Request header: ```{webhook-headers}```
+    - Response body: json 
+     
+      ```
+        {
+           id:{alphanumeric-backup-id},
+           status:{backup-status}
+           message:{backend-message}
+        }
+      ```
+      
+    - Status code 200 if deleted successfuly
+
+
+
 
 #### Retention config:
   - *[retention count]@[reference]*, where
-  - retention count: number of recent backups to be kept (older backups will be deleted)
-  - reference: when this backup will be triggered in reference to the minor time part. 'L' denotes the greatest time in reference
+    - retention count: number of recent backups to be kept (older backups will be deleted)
+    - reference: when this backup will be triggered in reference to the minor time part. 'L' denotes the greatest time in reference
   
 #### Examples:
 
@@ -45,7 +103,7 @@ format "header1=contents1,header2=contents2"
   * The backup will be triggered every day at 23h59min (L) and 7 backups will be kept. On the 8th day, the first backup will be deleted
 
 * Every 4 hours backups
-  * BACKUP_CRON_STRING    0 0 */4 ? * *
+  * BACKUP\_CRON\_STRING    0 0 */4 ? * *
   * RETENTION_HOURLY      6
   * RETENTION_DAILY       0/3
   * RETENTION_MONTHLY     2@L
