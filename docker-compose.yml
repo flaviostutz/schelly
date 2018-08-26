@@ -1,0 +1,21 @@
+version: '3.5'
+
+services:
+
+  schelly:
+    build: .
+    environment:
+      - BACKUP_NAME="test"
+      # - BACKUP_CRON_STRING=""
+      - WEBHOOK_URL=""
+      # - WEBHOOK_HEADERS=""
+      # - WEBHOOK_CREATE_BODY=""
+      # - WEBHOOK_DELETE_BODY=""
+      # - WEBHOOK_GRACE_TIME=""
+      # - RETENTION_SECONDLY=""
+      # - RETENTION_MINUTELY=""
+      # - RETENTION_HOURLY=""
+      # - RETENTION_DAILY=""
+      # - RETENTION_WEEKLY=""
+      # - RETENTION_MONTHLY=""
+      # - RETENTION_YEARLY=""
