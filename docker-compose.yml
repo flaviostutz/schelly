@@ -3,12 +3,15 @@ version: '3.5'
 services:
 
   schelly:
-    build: .
+    build:
+      context: .
+      target: IMAGE
     environment:
-      - BACKUP_NAME="test"
-      # - BACKUP_CRON_STRING=""
-      - WEBHOOK_URL=""
-      # - WEBHOOK_HEADERS=""
+      - LOG_LEVEL=debug
+      - BACKUP_NAME=test
+      - WEBHOOK_URL=http://schelly-restic:8080/backups
+      - BACKUP_CRON_STRING=0/2 * * * * *
+      - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
       # - WEBHOOK_DELETE_BODY=""
       # - WEBHOOK_GRACE_TIME=""
@@ -19,3 +22,21 @@ services:
       # - RETENTION_WEEKLY=""
       # - RETENTION_MONTHLY=""
       # - RETENTION_YEARLY=""
+
+  schelly-restic:
+    image: flaviostutz/schelly-restic
+    ports:
+      - 8080:8080
+    environment:
+      - RESTIC_PASSWORD=123
+      - LOG_LEVEL=debug
+      - PRE_BACKUP_COMMAND=/pre-test.sh
+      - POST_BACKUP_COMMAND=/post-test.sh
+
+networks:
+  default:
+    ipam:
+      driver: default
+      config:
+        - subnet: 192.168.5.0/24
+
