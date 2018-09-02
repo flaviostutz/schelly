@@ -29,8 +29,8 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 			return respData, nil
 		}
 	} else {
-		logrus.Warnf("Webhook status != 200")
-		return ResponseWebhook{}, fmt.Errorf("Couldn't get backup info. response=%s", resp)
+		logrus.Warnf("Webhook status != 200 resp=%s", resp)
+		return ResponseWebhook{}, fmt.Errorf("Couldn't get backup info")
 	}
 }
 
@@ -51,8 +51,8 @@ func createWebhookBackup() (ResponseWebhook, error) {
 			return respData, nil
 		}
 	} else {
-		logrus.Warnf("Webhook status != 201")
-		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response=%s", resp)
+		logrus.Warnf("Webhook status != 201. resp=%s", resp)
+		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response")
 	}
 }
 
@@ -67,8 +67,8 @@ func deleteWebhookBackup(backupID string) error {
 		logrus.Debugf("Webhook DELETE successful")
 		return nil
 	} else {
-		logrus.Warnf("Webhook status != 200")
-		return fmt.Errorf("Couldn't get backup info. response=%s", resp)
+		logrus.Warnf("Webhook status != 200. resp=%s", resp)
+		return fmt.Errorf("Couldn't get backup info")
 	}
 }
 

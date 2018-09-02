@@ -6,6 +6,7 @@ import (
 	_ "encoding/json"
 	_ "flag"
 	_ "io/ioutil"
+	_ "math/rand"
 	_ "net/http"
 	_ "os"
 	_ "os/signal"

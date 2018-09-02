@@ -5,7 +5,7 @@ services:
   schelly:
     build:
       context: .
-      target: IMAGE
+      # target: IMAGE
     environment:
       - LOG_LEVEL=debug
       - BACKUP_NAME=test

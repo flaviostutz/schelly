@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-# set -x
+set -x
 
 echo "Starting Schelly..."
 schelly \

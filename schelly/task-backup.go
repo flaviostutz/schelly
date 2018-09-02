@@ -10,9 +10,8 @@ func runBackupTask() {
 	start := time.Now()
 	logrus.Info("")
 	logrus.Info(">>>> BACKUP TASK")
-	logrus.Info("")
 
-	logrus.Debug("Checking if there is another running backup")
+	logrus.Debug("Checking if there is another backup running")
 
 	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
 	if err != nil {
@@ -33,12 +32,13 @@ func runBackupTask() {
 	} else {
 		if resp.Status == "available" {
 			logrus.Infof("Backup executed successfuly and is already available. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-			mid, err1 := createMaterializedBackup(resp.ID, "", startPostTime, time.Now(), "")
+			mid, err1 := createMaterializedBackup(resp.ID, resp.Status, startPostTime, time.Now(), resp.Message)
 			if err1 != nil {
 				logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 			} else {
 				logrus.Infof("Materialized backup reference saved to database successfuly. id=%s", mid)
 				setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
+				tagLastBackups()
 			}
 		} else if resp.Status == "running" {
 			logrus.Infof("Backup invoked successfuly but it is still running in background (not available yet). Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
@@ -50,6 +50,36 @@ func runBackupTask() {
 
 	elapsed := time.Now().Sub(start)
 	logrus.Infof("Backup task done. elapsed=%s", elapsed)
+}
+
+func tagLastBackups() {
+	logrus.Infof("Tagging backups")
+
+	backups, err := getAllMaterializedBackups(2)
+	if len(backups) != 2 {
+		logrus.Infof("Too few backups yet n=%s. Skipping", len(backups))
+		return
+	}
+
+	b1 := backups[1]
+	b0 := backups[0]
+
+	setTagsMaterializedBackup(b0.ID, "secondly,minutely,hourly,weekly,daily,monthly,yearly")
+
+	//secondly
+
+	//minutely
+
+	//hourly
+
+	//weekly
+
+	//daily
+
+	//monthly
+
+	//yearly
+
 }
 
 func checkBackupTask() {
@@ -66,7 +96,7 @@ func checkBackupTask() {
 		} else {
 			if resp.Status != backupStatus {
 				logrus.Infof("Backup %s finished on backend server. status=%s", backupID, resp.Status)
-				mid, err1 := createMaterializedBackup(resp.ID, "", backupDate, time.Now(), "")
+				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message)
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 				} else {
