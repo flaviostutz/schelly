@@ -68,7 +68,7 @@ func deleteWebhookBackup(backupID string) error {
 		return nil
 	} else {
 		logrus.Warnf("Webhook status != 200. resp=%s", resp)
-		return fmt.Errorf("Couldn't get backup info")
+		return fmt.Errorf("Webhook status != 200. resp=%s", resp)
 	}
 }
 
@@ -126,7 +126,7 @@ func getHTTP(url string) (http.Response, []byte, error) {
 }
 
 func deleteHTTP(url string) (http.Response, []byte, error) {
-	req, err := http.NewRequest("DELETE", options.webhookURL, nil)
+	req, err := http.NewRequest("DELETE", url, nil)
 	if err != nil {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
 		return http.Response{}, []byte{}, err

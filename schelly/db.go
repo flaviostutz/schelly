@@ -13,13 +13,18 @@ import (
 )
 
 type MaterializedBackup struct {
-	ID          string
-	StartTime   time.Time
-	EndTime     time.Time
-	Tags        string
-	Status      string
-	CustomData  string
-	IsReference int
+	ID         string
+	StartTime  time.Time
+	EndTime    time.Time
+	Status     string
+	CustomData string
+	Reference  int
+	Minutely   int
+	Hourly     int
+	Daily      int
+	Weekly     int
+	Monthly    int
+	Yearly     int
 }
 
 var db = &sql.DB{}
@@ -29,7 +34,7 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
-	statement, err1 := db0.Prepare("CREATE TABLE IF NOT EXISTS materialized_backup (id TEXT NOT NULL, status TEXT NOT NULL, start_time TIMESTAMP NOT NULL, end_time TIMESTAMP NOT NULL DEFAULT `2000-01-01`, custom_data TEXT NOT NULL DEFAULT ``, tags TEXT NOT NULL DEFAULT ``, is_reference INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
+	statement, err1 := db0.Prepare("CREATE TABLE IF NOT EXISTS materialized_backup (id TEXT NOT NULL, status TEXT NOT NULL, start_time TIMESTAMP NOT NULL, end_time TIMESTAMP NOT NULL DEFAULT `2000-01-01`, custom_data TEXT NOT NULL DEFAULT ``, minutely INTEGER NOT NULL DEFAULT 0, hourly INTEGER NOT NULL DEFAULT 0, daily INTEGER NOT NULL DEFAULT 0, weekly INTEGER NOT NULL DEFAULT 0, monthly INTEGER NOT NULL DEFAULT 0, yearly INTEGER NOT NULL DEFAULT 0, reference INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
 	if err1 != nil {
 		return err1
 	}
@@ -82,7 +87,7 @@ func createMaterializedBackup(backupID string, status string, startDate time.Tim
 }
 
 func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
-	rows, err1 := db.Query("SELECT id,tags,status,start_time,end_time,custom_data,is_reference FROM materialized_backup WHERE id='" + backupID + "'")
+	rows, err1 := db.Query("SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE id='" + backupID + "'")
 	if err1 != nil {
 		return MaterializedBackup{}, err1
 	}
@@ -90,7 +95,7 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Tags, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.IsReference)
+		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			return MaterializedBackup{}, err2
 		} else {
@@ -105,8 +110,12 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 	}
 }
 
-func getAllMaterializedBackups(limit int) ([]MaterializedBackup, error) {
-	q := "SELECT id,tags,status,start_time,end_time,custom_data,is_reference FROM materialized_backup ORDER BY start_time DESC")
+func getMaterializedBackups(limit int, tag string) ([]MaterializedBackup, error) {
+	where := ""
+	if tag != "" {
+		where = " WHERE tag='" + tag + "'"
+	}
+	q := "SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup " + where + " ORDER BY start_time DESC"
 	if limit != 0 {
 		q = q + fmt.Sprintf(" LIMIT %d", limit)
 	}
@@ -119,7 +128,7 @@ func getAllMaterializedBackups(limit int) ([]MaterializedBackup, error) {
 	var backups = make([]MaterializedBackup, 0)
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Tags, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.IsReference)
+		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			return []MaterializedBackup{}, err2
 		} else {
@@ -133,100 +142,136 @@ func getAllMaterializedBackups(limit int) ([]MaterializedBackup, error) {
 	return backups, nil
 }
 
-// func setTagsMaterializedBackup(backupID string, tags string) error {
-// 	// logrus.Infof("setTagsMaterializedBackup id=%s tags=%s", backupID, tags)
-// 	stmt, err1 := db.Prepare("UPDATE materialized_backup SET tags=? WHERE id=?")
-// 	if err1 != nil {
-// 		return err1
-// 	}
-// 	_, err2 := stmt.Exec(tags, backupID)
-// 	if err2 != nil {
-// 		return err2
-// 	}
-
-// 	return nil
-// }
-
-// func removeTagMaterializedBackup(backupID string, tag string) error {
-// 	backup, err := getMaterializedBackup(backupID)
-// 	if err != nil {
-// 		return err
-// 	} else if backup.ID == "" {
-// 		return fmt.Errorf("Backup %s not found in database", backupID)
-// 	}
-
-// 	if !tagFound(backup.Tags, tag) {
-// 		return fmt.Errorf("Couldn't find tag '%s' on backup %s. tags=%s", tag, backup.ID, backup.Tags)
-// 	}
-
-// 	ts := strings.Split(backup.Tags, ",")
-// 	newTags := ""
-// 	for _, t := range ts {
-// 		if t != tag {
-// 			if newTags != "" {
-// 				newTags = newTags + "," + t
-// 			} else {
-// 				newTags = t
-// 			}
-// 		}
-// 	}
-// 	return setTagsMaterializedBackup(backupID, newTags)
-// }
-
-// func addTagMaterializedBackup(backupID string, tag string) error {
-// 	// logrus.Infof("addTagMaterializedBackup id=%s tag=%s", backupID, tag)
-// 	backup, err := getMaterializedBackup(backupID)
-// 	if err != nil {
-// 		return err
-// 	} else if backup.ID == "" {
-// 		return fmt.Errorf("Backup %s not found in database", backupID)
-// 	}
-
-// 	if tagFound(backup.Tags, tag) {
-// 		return fmt.Errorf("Couldn't find tag '%s' on backup %s. tags=%s", tag, backup.ID, backup.Tags)
-// 	}
-
-// 	newTags := tag
-// 	if backup.Tags != "" {
-// 		newTags = backup.Tags + "," + tag
-// 	}
-// 	return setTagsMaterializedBackup(backupID, newTags)
-// }
-
-// func markAsReferenceMaterializedBackup(backupID string, isReference bool) error {
-// 	stmt, err1 := db.Prepare("UPDATE materialized_backup SET is_reference=? WHERE id=?")
-// 	if err1 != nil {
-// 		return err1
-// 	}
-// 	ref := 0
-// 	if isReference {
-// 		ref = 1
-// 	}
-// 	_, err2 := stmt.Exec(ref, backupID)
-// 	if err2 != nil {
-// 		return err2
-// 	}
-// 	return nil
-// }
-
-// func isReferenceMaterializedBackup(backupID string) (bool, error) {
-// 	backup, err := getMaterializedBackup(backupID)
-// 	if err != nil {
-// 		return false, err
-// 	} else if backup.ID == "" {
-// 		return false, fmt.Errorf("Backup %s not found in database", backupID)
-// 	} else {
-// 		return backup.IsReference == 1, nil
-// 	}
-// }
-
-func tagFound(tags string, tag string) bool {
-	found := false
-	ts := strings.Split(","+tags+",", ",")
-	for _, t := range ts {
-		if t == tag {
-			found = true
+func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int, limit int) ([]MaterializedBackup, error) {
+	whereTags := ""
+	tags := []string{"minutely", "hourly", "daily", "weekly", "monthly", "yearly"}
+	if tag != "" {
+		for _, t := range tags {
+			if t == tag {
+				whereTags = whereTags + t + "=1"
+			} else if whereTags != "" {
+				whereTags = whereTags + " AND " + t + "=0"
+			}
+		}
+	} else {
+		for _, t := range tags {
+			if whereTags != "" {
+				whereTags = whereTags + " AND "
+			}
+			whereTags = whereTags + t + "=0"
 		}
 	}
-	return found
+
+	q := fmt.Sprintf("SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE %s AND status='available' ORDER BY start_time DESC LIMIT %d OFFSET %d", whereTags, limit, skipNewestCount)
+	logrus.Debugf("getExclusiveTags query=%s", q)
+	rows, err1 := db.Query(q)
+	if err1 != nil {
+		return []MaterializedBackup{}, err1
+	}
+	defer rows.Close()
+
+	var backups = make([]MaterializedBackup, 0)
+	for rows.Next() {
+		backup := MaterializedBackup{}
+		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		if err2 != nil {
+			return []MaterializedBackup{}, err2
+		} else {
+			backups = append(backups, backup)
+		}
+	}
+	err := rows.Err()
+	if err != nil {
+		return []MaterializedBackup{}, err
+	}
+	return backups, nil
+}
+
+func clearTagsAndReferenceMaterializedBackup(tx *sql.Tx) (sql.Result, error) {
+	stmt, err := db.Prepare("UPDATE materialized_backup SET reference=0, minutely=0, hourly=0, daily=0, weekly=0, monthly=0, yearly=0;")
+	if err != nil {
+		return nil, err
+	}
+	res, err0 := tx.Stmt(stmt).Exec()
+	return res, err0
+}
+
+func setAllTagsMaterializedBackup(tx *sql.Tx, backupID string) (sql.Result, error) {
+	stmt, err := db.Prepare("UPDATE materialized_backup SET minutely=1, hourly=1, daily=1, weekly=1, monthly=1, yearly=1 WHERE id=?;")
+	if err != nil {
+		return nil, err
+	}
+	res, err0 := tx.Stmt(stmt).Exec(backupID)
+	return res, err0
+}
+
+func markReferencesMinutelyMaterializedBackup(tx *sql.Tx, secondReference string) (sql.Result, error) {
+	sql := `UPDATE materialized_backup set reference=1, minutely=1
+											WHERE id IN (
+												SELECT y.id AS id FROM 
+												(SELECT id, strftime('%Y-%m-%dT%H:%M:0.000', start_time) AS timeref, MIN(ABS(strftime('%S', start_time)-` + secondReference + `)) AS refdiff
+													FROM materialized_backup p
+													GROUP BY strftime('%Y-%m-%dT%H:%M:0.000', start_time)) y
+											)`
+	logrus.Debugf("sql=%s", sql)
+	stmt, err := db.Prepare(sql)
+	if err != nil {
+		return nil, err
+	}
+	res, err0 := tx.Stmt(stmt).Exec()
+	return res, err0
+}
+
+func setStatusMaterializedBackup(backupID string, status string) (sql.Result, error) {
+	sql := `UPDATE materialized_backup SET status=? WHERE id=?`
+	stmt, err := db.Prepare(sql)
+	logrus.Infof("%s %s %s", sql, backupID, status)
+	if err != nil {
+		return nil, err
+	}
+	return stmt.Exec(status, backupID)
+}
+
+func markTagMaterializedBackup(tx *sql.Tx, tag string, previousTag string, groupByPattern string, diffPattern string, ref string) (sql.Result, error) {
+	sql := `UPDATE materialized_backup set ` + tag + `=1
+								WHERE id IN (
+									SELECT y.id AS id FROM 
+									(SELECT id, strftime('` + groupByPattern + `', start_time) AS timeref, MIN(ABS(strftime('` + diffPattern + `', start_time)-` + ref + `)) AS refdiff
+										FROM materialized_backup p
+										WHERE reference=1 AND ` + previousTag + `=1
+										GROUP BY strftime('` + groupByPattern + `', start_time)) y
+								)`
+	logrus.Debugf("sql=%s", sql)
+	stmt, err := db.Prepare(sql)
+	if err != nil {
+		return nil, err
+	}
+	res, err0 := tx.Stmt(stmt).Exec()
+	return res, err0
+}
+
+func getTags(backup MaterializedBackup) []string {
+	t := make([]string, 0)
+	if backup.Reference == 1 {
+		t = append(t, "reference")
+	}
+	if backup.Minutely == 1 {
+		t = append(t, "minutely")
+	}
+	if backup.Hourly == 1 {
+		t = append(t, "hourly")
+	}
+	if backup.Daily == 1 {
+		t = append(t, "daily")
+	}
+	if backup.Weekly == 1 {
+		t = append(t, "weekly")
+	}
+	if backup.Monthly == 1 {
+		t = append(t, "monthly")
+	}
+	if backup.Yearly == 1 {
+		t = append(t, "yearly")
+	}
+	return t
 }

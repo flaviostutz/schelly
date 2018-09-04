@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "bytes"
+	_ "context"
 	_ "database/sql"
 	_ "encoding/json"
 	_ "flag"
@@ -15,6 +16,7 @@ import (
 	_ "time"
 
 	_ "github.com/Sirupsen/logrus"
+	_ "github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/robfig/cron"
 )

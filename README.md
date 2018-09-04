@@ -3,7 +3,7 @@ Schelly is a backup tool focused on the scheduling stuff, so that the heavy lift
 
 The triggering and retainment of backups are based on the functional perception of backups, so you configure:
    - Triggering cron string: cron string that defines when a new backup will be created (by calling a backend backup webhook, as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
-   - Retention policies: for how long do a backup must be retained? It depends on what the user needs when something goes wrong. In general, the more recent, more backups in time you need. By default, Schelly will try to keep something like (if a backup is outsIDe this, the webhook for backup removal will be called):
+   - Retention policies: for how long do a backup must be retained? It depends on what the user needs when something goes wrong. In general, the more recent, more backups in time you need. By default, Schelly will try to keep something like (if a backup is outside this, the webhook for backup removal will be called):
        - the last 4 daily backups
        - the last 4 weekly backps
        - the last 3 monthly backups
@@ -26,9 +26,59 @@ The triggering and retainment of backups are based on the functional perception 
 * RETENTION_YEARLY - retention config for years
 format "header1=contents1,header2=contents2"
 * WEBHOOK_BODY - custom data to be sent as body for webhook calls to backup backends
-* GRACE\_TIME\_SECONDS - when trying to run a new backup task, if a previous task is still running because it dIDn't finish yet, check for this parameter. if time elapsed for the running task is greater than this parameter, try to cancel it by emitting a DELETE webhook and start the new task, else mark the new task as SKIPPED and keep the running task as is.
+* GRACE\_TIME\_SECONDS - when trying to run a new backup task, if a previous task is still running because it didn't finish yet, check for this parameter. if time elapsed for the running task is greater than this parameter, try to cancel it by emitting a DELETE webhook and start the new task, else mark the new task as SKIPPED and keep the running task as is.
+
+# REST API
+
+  - ```GET /backups```
+    - Query backups managed by Schelly
+    - Request body: none
+    - Request header: none
+    - Response body: json 
+     
+      ```
+        {
+           id:{same id as returned by underlying webhook on backup creation},
+           status:{backup-status}
+           start_time:{time of backup trigger on webhook}
+           end_time:{time of backup finish detection}
+           custom_data:{data returned from webhook}
+           tags: {array of tags}
+        }
+      ```
+      - status must be one of:
+          - 'running' - backup is not finished yet
+          - 'available' - backup has completed successfuly
+      
+      - tags may be: 'minutely', 'hourly', 'daily', 'weekly', 'monthly', 'yearly'
+      
+    - Status code 201 if created successfuly
+
+  - ```POST /backups```
+    - Trigger a new backup now
+    - Request body: none
+    - Request header: none
+    - Response body: json 
+     
+      ```
+        {
+           id:{same id as returned by underlying webhook on backup creation},
+           status:{backup-status}
+           start_time:{time of backup trigger on webhook}
+           end_time:{time of backup finish detection}
+           custom_data:{data returned from webhook}
+        }
+      ```
+      - status must be one of:
+          - 'running' - backup is not finished yet
+          - 'available' - backup has completed successfuly
+            
+    - Status code 201 if created successfuly
+
 
 # Webhook spec
+
+will be invoked when Schelly needs to create/delete a backup on a backend server
 
 The webhook server must expose the following REST endpoints:
 
@@ -40,7 +90,7 @@ The webhook server must expose the following REST endpoints:
      
       ```
         {
-           ID:{alphanumeric-backup-ID},
+           id:{alphanumeric-backup-id},
            status:{backup-status}
            message:{backend-message}
         }
@@ -51,21 +101,21 @@ The webhook server must expose the following REST endpoints:
       
     - Status code 201 if created successfuly
 
-  - ```GET {webhook-url}/{backup-ID}```
+  - ```GET {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to query a specific backup instance
     - Request header: ```{webhook-headers}```
     - Response body: json
     
        ```
          {
-           ID:{ID},
+           id:{id},
            status:{backup-status},
            message:{backend message}
          }
        ```
     - Status code: 200 if found, 404 if not found
 
-  - ```DELETE {webhook-url}/{backup-ID}```
+  - ```DELETE {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to trigger a new backup
     - Request body: json ```{webhook-delete-body}```
     - Request header: ```{webhook-headers}```
@@ -73,7 +123,7 @@ The webhook server must expose the following REST endpoints:
      
       ```
         {
-           ID:{alphanumeric-backup-ID},
+           id:{alphanumeric-backup-id},
            status:{backup-status}
            message:{backend-message}
         }

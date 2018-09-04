@@ -5,7 +5,9 @@ services:
   schelly:
     build:
       context: .
-      # target: IMAGE
+      target: IMAGE
+    ports:
+      - 7070:8080
     environment:
       - LOG_LEVEL=debug
       - BACKUP_NAME=test
@@ -14,9 +16,8 @@ services:
       - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
       # - WEBHOOK_DELETE_BODY=""
-      # - WEBHOOK_GRACE_TIME=""
-      # - RETENTION_SECONDLY=""
-      # - RETENTION_MINUTELY=""
+      - WEBHOOK_GRACE_TIME=30
+      - RETENTION_MINUTELY=2
       # - RETENTION_HOURLY=""
       # - RETENTION_DAILY=""
       # - RETENTION_WEEKLY=""

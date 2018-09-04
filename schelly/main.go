@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"os"
-	"os/signal"
 	"strconv"
 	"strings"
 
@@ -25,8 +24,9 @@ type Options struct {
 	webhookDeleteBody string
 	graceTimeSeconds  float64
 	dataDir           string
+	listenPort        int
+	listenIP          string
 
-	secondlyParams []string
 	minutelyParams []string
 	hourlyParams   []string
 	dailyParams    []string
@@ -53,10 +53,11 @@ func main() {
 	webhookCreateBody := flag.String("webhook-create-body", "", "Custom json body to be sent to backup backend webhook when requesting the creation of a new backup")
 	webhookDeleteBody := flag.String("webhook-delete-body", "", "Custom json body to be sent to backup backend webhook when requesting the removal of an existing backup")
 	graceTimeSeconds := flag.String("webhook-grace-time", "3600", "Minimum time seconds running backup task before trying to cancel it (by calling a /DELETE on the webhook)")
+	listenPort := flag.Int("listen-port", 8080, "REST API server listen port")
+	listenIP := flag.String("listen-ip", "0.0.0.0", "REST API server listen ip address")
 
-	secondlyRetention := flag.String("retention-secondly", "0", "Secondly retention config")
 	minutelyRetention := flag.String("retention-minutely", "0", "Minutely retention config")
-	hourlyRetention := flag.String("retention-hourly", "0", "Hourly retention config")
+	hourlyRetention := flag.String("retention-hourly", "1", "Hourly retention config")
 	dailyRetention := flag.String("retention-daily", "4@L", "Daily retention config")
 	weeklyRetention := flag.String("retention-weekly", "3@L", "Weekly retention config")
 	monthlyRetention := flag.String("retention-monthly", "3@L", "Monthly retention config")
@@ -96,17 +97,18 @@ func main() {
 	gts, err2 := strconv.ParseFloat(*graceTimeSeconds, 64)
 	options.graceTimeSeconds = gts
 	if err2 != nil {
-		logrus.Errorf("grace-time-seconds is not a valid number. err=%s", err2)
+		logrus.Errorf("grace-time-seconds has not a valid number. err=%s", err2)
 		os.Exit(1)
 	}
+	options.listenPort = *listenPort
+	options.listenIP = *listenIP
 
-	options.secondlyParams = retentionParams(*secondlyRetention)
-	options.minutelyParams = retentionParams(*minutelyRetention)
-	options.hourlyParams = retentionParams(*hourlyRetention)
-	options.dailyParams = retentionParams(*dailyRetention)
-	options.weeklyParams = retentionParams(*weeklyRetention)
-	options.monthlyParams = retentionParams(*monthlyRetention)
-	options.yearlyParams = retentionParams(*yearlyRetention)
+	options.minutelyParams = retentionParams(*minutelyRetention, "59")
+	options.hourlyParams = retentionParams(*hourlyRetention, "59")
+	options.dailyParams = retentionParams(*dailyRetention, "23")
+	options.weeklyParams = retentionParams(*weeklyRetention, "7")
+	options.monthlyParams = retentionParams(*monthlyRetention, "L")
+	options.yearlyParams = retentionParams(*yearlyRetention, "12")
 
 	headers := strings.Split(*webhookHeaders, ",")
 	options.webhookHeaders = make(map[string]string)
@@ -146,7 +148,7 @@ func main() {
 
 	if options.backupCron == "" {
 		logrus.Debug("Generating CRON schedule string")
-		options.backupCron = CalculateCronString(options.secondlyParams, options.minutelyParams, options.hourlyParams, options.dailyParams, options.weeklyParams, options.monthlyParams, options.yearlyParams)
+		options.backupCron = CalculateCronString(options.minutelyParams, options.hourlyParams, options.dailyParams, options.weeklyParams, options.monthlyParams, options.yearlyParams)
 	}
 
 	if options.retentionCron == "" {
@@ -157,22 +159,24 @@ func main() {
 	logrus.Infof("Starting retention cron with schedule '%s'", options.retentionCron)
 
 	//for tests
-	runBackupTask()
+	// runBackupTask()
 
 	c := cron.New()
 	c.AddFunc(options.backupCron, func() { runBackupTask() })
 	c.AddFunc("@every 1s", func() { checkBackupTask() })
 	c.AddFunc(options.retentionCron, func() { runRetentionTask() })
+	c.AddFunc("@every 12h", func() { retryDeleteErrors() })
 	go c.Start()
-	//wait for CTRL+C
-	sig := make(chan os.Signal)
-	signal.Notify(sig, os.Interrupt, os.Kill)
-	<-sig
+
+	startRestAPI()
+	// //wait for CTRL+C
+	// sig := make(chan os.Signal)
+	// signal.Notify(sig, os.Interrupt, os.Kill)
+	// <-sig
 }
 
 // CalculateCronString calculates a default cron string based on retention time
-func CalculateCronString(secondlyParams []string, minutelyParams []string, hourlyParams []string, dailyParams []string, weeklyParams []string, monthlyParams []string, yearlyParams []string) string {
-	// logrus.Infof("s0 %s", secondlyParams[0])
+func CalculateCronString(minutelyParams []string, hourlyParams []string, dailyParams []string, weeklyParams []string, monthlyParams []string, yearlyParams []string) string {
 	// logrus.Infof("m0 %s", minutelyParams[0])
 	// logrus.Infof("h0 %s", hourlyParams[0])
 	// logrus.Infof("d0 %s", dailyParams[0])
@@ -208,9 +212,7 @@ func CalculateCronString(secondlyParams []string, minutelyParams []string, hourl
 		yearlyRef = "12 "
 	}
 
-	if secondlyParams[0] != "0" {
-		return "* * * * * * *"
-	} else if minutelyParams[0] != "0" {
+	if minutelyParams[0] != "0" {
 		return minutelyRef + "* * * * * *"
 	} else if hourlyParams[0] != "0" {
 		return minutelyRef + hourlyRef + "* * * * *"
@@ -226,13 +228,19 @@ func CalculateCronString(secondlyParams []string, minutelyParams []string, hourl
 	}
 }
 
-func retentionParams(config string) []string {
-	params := strings.Split(config, "@")
-	if len(params) == 0 {
-		params = append(params, "0")
+func retentionParams(config string, lastReference string) []string {
+	if config == "" {
+		return []string{"0", lastReference}
 	}
+	params := strings.Split(config, "@")
 	if len(params) == 1 {
 		params = append(params, "L")
+	}
+	if params[1] == "" {
+		params[1] = "L"
+	}
+	if params[1] == "L" {
+		params[1] = lastReference
 	}
 	return params
 }
