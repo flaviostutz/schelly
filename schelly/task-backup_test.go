@@ -12,7 +12,7 @@ import (
 )
 
 func TestBackupTagging(t *testing.T) {
-	logrus.SetLevel(logrus.DebugLevel)
+	// logrus.SetLevel(logrus.DebugLevel)
 	initDB()
 
 	bid := strconv.Itoa(rand.Int())
@@ -115,10 +115,10 @@ func TestBackupTagging(t *testing.T) {
 	assert.Nil(t, err0, "err")
 
 	//test is performed on samples from 2006
-	backups, _ := getAllMaterializedBackups(0)
+	backups, _ := getMaterializedBackups(0, "", "", false)
 	testbackup := keepOnly2006(backups)
 
-	assertTags(t, testbackup[0], true, true, true, false, true, true)
+	assertTags(t, testbackup[0], true, true, true, true, true, true)
 	assertTags(t, testbackup[1], true, true, true, true, false, false)
 	assertTags(t, testbackup[2], true, true, true, false, false, false)
 	assertTags(t, testbackup[3], true, true, true, true, true, false)
@@ -136,32 +136,32 @@ func TestBackupTagging(t *testing.T) {
 	assertTags(t, testbackup[15], true, true, false, false, false, false)
 	assertTags(t, testbackup[16], true, false, false, false, false, false)
 
-	backups, err0 = getExclusiveTagMaterializedBackups("minutely", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("minutely", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 2, len(backups), "minutely")
 
-	backups, err0 = getExclusiveTagMaterializedBackups("hourly", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("hourly", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 5, len(backups), "hourly")
 
-	backups, err0 = getExclusiveTagMaterializedBackups("daily", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("daily", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 4, len(backups), "daily")
 
-	backups, err0 = getExclusiveTagMaterializedBackups("weekly", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("weekly", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 2, len(backups), "weekly")
 
-	backups, err0 = getExclusiveTagMaterializedBackups("monthly", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("monthly", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 3, len(backups), "monthly")
 
-	backups, err0 = getExclusiveTagMaterializedBackups("yearly", 0, 999)
+	backups, err0 = getExclusiveTagAvailableMaterializedBackups("yearly", 0, 999)
 	backups = keepOnly2006(backups)
 	assert.Nil(t, err0, "err")
 	assert.Equal(t, 1, len(backups), "yearly")
@@ -200,7 +200,7 @@ func initMainOptions() {
 }
 
 func showAllBackups() {
-	backups, _ := getAllMaterializedBackups(0)
+	backups, _ := getMaterializedBackups(0, "", "", false)
 	for _, b := range backups {
 		info := fmt.Sprintf("%s ", b.StartTime)
 		if b.Reference == 1 {
@@ -224,8 +224,7 @@ func showAllBackups() {
 		if b.Yearly == 1 {
 			info += "Yearly "
 		}
-		logrus.Infof("%s", info)
-		// logrus.Infof("%s %s %s %s %s %s %s %s", b.StartTime, b.Reference, b.Minutely, b.Hourly, b.Daily, b.Weekly, b.Monthly, b.Yearly)
+		logrus.Debugf("%s", info)
 	}
 }
 

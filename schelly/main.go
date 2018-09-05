@@ -165,25 +165,14 @@ func main() {
 	c.AddFunc(options.backupCron, func() { runBackupTask() })
 	c.AddFunc("@every 1s", func() { checkBackupTask() })
 	c.AddFunc(options.retentionCron, func() { runRetentionTask() })
-	c.AddFunc("@every 12h", func() { retryDeleteErrors() })
+	c.AddFunc("@every 1d", func() { retryDeleteErrors() })
 	go c.Start()
 
 	startRestAPI()
-	// //wait for CTRL+C
-	// sig := make(chan os.Signal)
-	// signal.Notify(sig, os.Interrupt, os.Kill)
-	// <-sig
 }
 
 // CalculateCronString calculates a default cron string based on retention time
 func CalculateCronString(minutelyParams []string, hourlyParams []string, dailyParams []string, weeklyParams []string, monthlyParams []string, yearlyParams []string) string {
-	// logrus.Infof("m0 %s", minutelyParams[0])
-	// logrus.Infof("h0 %s", hourlyParams[0])
-	// logrus.Infof("d0 %s", dailyParams[0])
-	// logrus.Infof("w0 %s", weeklyParams[0])
-	// logrus.Infof("m0 %s", monthlyParams[0])
-	// logrus.Infof("y0 %s", yearlyParams[0])
-
 	// Seconds      Minutes      Hours      Day Of Month      Month      Day Of Week      Year
 	minutelyRef := minutelyParams[1] + " "
 	if minutelyRef == "L " {

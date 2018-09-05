@@ -28,14 +28,12 @@ func runBackupTask() {
 				time.Sleep(5 * time.Second)
 			} else {
 				logrus.Errorf("Error triggering backup. Won't retry anymore. err=%s", err)
-				runningBackupTask = false
 			}
 		} else {
 			logrus.Infof("Backup task done. elapsed=%s", elapsed)
-			runningBackupTask = false
 		}
 	}
-
+	runningBackupTask = false
 }
 
 func triggerNewBackup() (ResponseWebhook, error) {
@@ -68,13 +66,13 @@ func triggerNewBackup() (ResponseWebhook, error) {
 			if err1 != nil {
 				return resp, fmt.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 			} else {
-				logrus.Infof("Materialized backup reference saved to database successfuly. id=%s", mid)
+				logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 				setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 				err1 = tagAllBackups()
 				if err1 != nil {
 					return resp, fmt.Errorf("Cannot tag backups. err=%s", err1)
 				} else {
-					logrus.Info("Backups tagging run successfuly")
+					logrus.Debug("Backups tagging run successfuly")
 				}
 			}
 		} else if resp.Status == "running" {
@@ -86,12 +84,12 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	}
 
 	elapsed := time.Now().Sub(start)
-	logrus.Infof("Backup triggering done. elapsed=%s", elapsed)
+	logrus.Debugf("Backup triggering done. elapsed=%s", elapsed)
 	return resp, nil
 }
 
 func tagAllBackups() error {
-	logrus.Infof("Tagging backups")
+	logrus.Debugf("Tagging backups")
 
 	//begin transaction
 	logrus.Debug("Begining db transaction")
@@ -102,7 +100,7 @@ func tagAllBackups() error {
 
 	//check last backup
 	logrus.Debug("Checking for backups available")
-	backups, err1 := getMaterializedBackups(1, "")
+	backups, err1 := getMaterializedBackups(1, "", "available", false)
 	if err1 != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error getting last backup. err=%s", err)
@@ -218,12 +216,12 @@ func checkBackupTask() {
 			checkGraceTime()
 		} else {
 			if resp.Status != backupStatus {
-				logrus.Infof("Backup %s finished on backend server. status=%s", backupID, resp.Status)
+				logrus.Infof("Backup %s finish detected on backend server. status=%s", backupID, resp.Status)
 				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message)
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 				} else {
-					logrus.Infof("Materialized backup reference saved to database successfuly. id=%s", mid)
+					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
 				}
 			}

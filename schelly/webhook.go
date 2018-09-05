@@ -6,13 +6,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
 )
 
+//avoid doing webhook operations in parallel
+var webhookLock = &sync.Mutex{}
+
 func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
-	logrus.Debugf("getWebhookBackupInfo %s", backupID)
+	logrus.Debugf("getWebhookBackupInfo %s - waiting lock", backupID)
+	webhookLock.Lock()
+	defer webhookLock.Unlock()
+	logrus.Debugf("getWebhookBackupInfo %s - acquired lock", backupID)
 	logrus.Debug(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
@@ -35,7 +42,10 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 }
 
 func createWebhookBackup() (ResponseWebhook, error) {
-	logrus.Debugf("createWebhookBackup")
+	logrus.Debugf("createWebhookBackup - waiting lock")
+	webhookLock.Lock()
+	defer webhookLock.Unlock()
+	logrus.Debugf("createWebhookBackup - acquired lock")
 	resp, data, err := postHTTP(options.webhookURL, options.webhookCreateBody)
 	if err != nil {
 		logrus.Errorf("Webhook POST new backup invocation failed. err=%s", err)
@@ -57,7 +67,10 @@ func createWebhookBackup() (ResponseWebhook, error) {
 }
 
 func deleteWebhookBackup(backupID string) error {
-	logrus.Debugf("deleteWebhookBackup %s", backupID)
+	logrus.Debugf("deleteWebhookBackup %s - waiting lock", backupID)
+	webhookLock.Lock()
+	defer webhookLock.Unlock()
+	logrus.Debugf("deleteWebhookBackup %s - acquired lock", backupID)
 	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook DELETE backup invocation failed. err=%s", err)
@@ -66,9 +79,12 @@ func deleteWebhookBackup(backupID string) error {
 	if resp.StatusCode == 200 {
 		logrus.Debugf("Webhook DELETE successful")
 		return nil
+	} else if resp.StatusCode == 404 {
+		logrus.Warnf("Webhook DELETE appears to be successful. Return was 404 NOT FOUND.")
+		return nil
 	} else {
 		logrus.Warnf("Webhook status != 200. resp=%s", resp)
-		return fmt.Errorf("Webhook status != 200. resp=%s", resp)
+		return fmt.Errorf("Webhook status != 200. resp=%v", resp)
 	}
 }
 

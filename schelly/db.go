@@ -110,15 +110,29 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 	}
 }
 
-func getMaterializedBackups(limit int, tag string) ([]MaterializedBackup, error) {
+func getMaterializedBackups(limit int, tag string, status string, randomOrder bool) ([]MaterializedBackup, error) {
 	where := ""
-	if tag != "" {
-		where = " WHERE tag='" + tag + "'"
+	if tag != "" || status != "" {
+		where = where + " WHERE "
+		if tag != "" {
+			where = where + " " + tag + "=1"
+		}
+		if status != "" {
+			if tag != "" {
+				where = where + " AND "
+			}
+			where = where + " status='" + status + "'"
+		}
 	}
-	q := "SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup " + where + " ORDER BY start_time DESC"
+	orderBy := "start_time DESC"
+	if randomOrder {
+		orderBy = "RANDOM()"
+	}
+	q := "SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup " + where + " ORDER BY " + orderBy
 	if limit != 0 {
 		q = q + fmt.Sprintf(" LIMIT %d", limit)
 	}
+	logrus.Debugf("query=%s", q)
 	rows, err1 := db.Query(q)
 	if err1 != nil {
 		return []MaterializedBackup{}, err1

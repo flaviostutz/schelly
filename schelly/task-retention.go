@@ -53,27 +53,7 @@ func triggerRetentionTask() {
 		} else if ra != 1 {
 			logrus.Errorf("Strange number of affected rows while setting status of backup '%s' to 'deleting'. Skipping backup deletion. rowsAffected=%d", backup.ID, ra)
 		} else {
-			// res, err2 := getMaterializedBackup(backup.ID)
-			// if err2 != nil {
-			// 	logrus.Errorf(">>>>>ERR %s", err2)
-			// } else {
-			// 	logrus.Infof(">>>>>INFO %s", res)
-			// }
-			// logrus.Debugf(">>>>>>>CHANGED TO DELETING")
-			err = deleteWebhookBackup(backup.ID)
-			if err != nil {
-				logrus.Warnf("Could not delete backup '%s' using webhook. err=%s", backup.ID, err)
-				res, err = setStatusMaterializedBackup(backup.ID, "delete-error")
-				if err != nil {
-					logrus.Warnf("Could not set backup %s status to 'delete-error'. err=%s", backup.ID, err)
-				}
-			} else {
-				logrus.Infof("Backup '%s' deleted successfuly", backup.ID)
-				res, err = setStatusMaterializedBackup(backup.ID, "deleted")
-				if err != nil {
-					logrus.Warnf("Could not set backup %s status to 'deleted'. err=%s", backup.ID, err)
-				}
-			}
+			performBackupDelete(backup.ID)
 		}
 	}
 
@@ -81,18 +61,32 @@ func triggerRetentionTask() {
 	logrus.Infof("Retention management task done. elapsed=%s", elapsed)
 }
 
+func performBackupDelete(backupID string) {
+	err := deleteWebhookBackup(backupID)
+	if err != nil {
+		logrus.Warnf("Could not delete backup '%s' using webhook. err=%s", backupID, err)
+		_, err0 := setStatusMaterializedBackup(backupID, "delete-error")
+		if err0 != nil {
+			logrus.Warnf("Could not set backup %s status to 'delete-error'. err=%s", backupID, err0)
+		}
+	} else {
+		logrus.Infof("Backup '%s' deleted successfuly", backupID)
+		_, err0 := setStatusMaterializedBackup(backupID, "deleted")
+		if err0 != nil {
+			logrus.Warnf("Could not set backup %s status to 'deleted'. err=%s", backupID, err0)
+		}
+	}
+}
+
 func retryDeleteErrors() {
 	logrus.Debugf("Retrying webhook delete for backups with 'delete-error' tag")
-	backups, err := getMaterializedBackups(10, "delete-error")
+	backups, err := getMaterializedBackups(10, "", "delete-error", true)
 	if err != nil {
 		logrus.Errorf("Couldn't query backups tagged as 'delete-error'. err=%s", err)
 	} else if len(backups) > 0 {
-		logrus.Infof("%d backups tagged with 'backup-error'. retrying to delete them on webhook (limited to 10 at each retry)", len(backups))
+		logrus.Infof("%d backups tagged with 'backup-error' randomly gotten (limiting to 10). retrying to delete them on webhook", len(backups))
 		for _, backup := range backups {
-			err = deleteWebhookBackup(backup.ID)
-			if err != nil {
-				logrus.Warnf("Could not delete backup '%s' using webhook. err=%s", backup.ID, err)
-			}
+			performBackupDelete(backup.ID)
 		}
 	} else {
 		logrus.Debugf("No backups tagged with 'delete-error'")

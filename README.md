@@ -12,7 +12,7 @@ The triggering and retainment of backups are based on the functional perception 
 # ENV configurations
 
 * BACKUP_NAME - name of the backup used as webhook prefix /[backup name]
-* BACKUP_CRON_STRING
+* BACKUP_CRON_STRING - cron like string that configures the scheduling for the creation of new backups. if not defined, we will try to calculate an optimal schedule from the retetion policies
 * WEBHOOK_HEADERS - custom k=v comma separated list of http headers to be sent on webhook calls to backup backends
 * WEBHOOK_CREATE_BODY - custom body to be sent to backup backend during new backup calls
 * WEBHOOK_DELETE_BODY - custom body to be sent to backup backend during delete backup calls
@@ -32,6 +32,9 @@ format "header1=contents1,header2=contents2"
 
   - ```GET /backups```
     - Query backups managed by Schelly
+    - Query params:
+       - 'status' - filter by status
+       - 'tag' - filter by single tag
     - Request body: none
     - Request header: none
     - Response body: json 
@@ -163,4 +166,10 @@ The webhook server must expose the following REST endpoints:
   * RETENTION_MONTHLY     2@L
   * Trigger a backup every 4 hours and keep 6 of them, deleting older ones.
   * Mark the backup created on the last day of the month near 3am as 'monthly' and keep 2 of them.
+
+# More info
+
+* Schelly will avoid performing concurrent invocations on webhook api
+* If a backup fails (POST /backup webhook returns something different from 201), it will wait 5 seconds and retry again until 'grace time'
+* If a backup deletion fails (DELETE /backup/{backupid} returns something different from 200), it will mark backup with status 'delete-error' and once a day will randomly retry to delete some of them.
 

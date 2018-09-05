@@ -26,7 +26,8 @@ func startRestAPI() {
 func GetBackups(w http.ResponseWriter, r *http.Request) {
 	logrus.Debugf("GetBackups r=%s", r)
 	tag := r.URL.Query().Get("tag")
-	backups, err := getMaterializedBackups(0, tag)
+	status := r.URL.Query().Get("status")
+	backups, err := getMaterializedBackups(0, tag, status, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
