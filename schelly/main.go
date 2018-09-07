@@ -40,6 +40,7 @@ type ResponseWebhook struct {
 	ID      string `json:"id",omitempty`
 	Status  string `json:"status",omitempty`
 	Message string `json:"message",omitempty`
+	Size    int64  `json:"size",omitempty`
 }
 
 var options = new(Options)

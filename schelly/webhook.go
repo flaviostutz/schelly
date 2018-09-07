@@ -14,41 +14,58 @@ import (
 )
 
 //METRICS
-var getBackupInfoSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
+var backupInfoTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "webhook_backup_info_time_seconds",
+	Help: "Time for last POST /backups/{id} call in seconds",
+})
+var backupInfoSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_info_success_total",
-	Help: "Total GET /backup/{id} calls success",
+	Help: "Total GET /backups/{id} calls success",
 })
-var getBackupInfoErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+var backupInfoErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_info_error_total",
-	Help: "Total GET /backup/{id} calls error",
+	Help: "Total GET /backups/{id} calls error",
 })
-var getBackupCreateSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
+
+var backupCreateTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "webhook_backup_create_time_seconds",
+	Help: "Time for last POST /backups call in seconds",
+})
+var backupCreateSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_create_success_total",
-	Help: "Total POST /backup calls success",
+	Help: "Total POST /backups calls success",
 })
-var getBackupCreateErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+var backupCreateErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_create_error_total",
-	Help: "Total POST /backup calls error",
+	Help: "Total POST /backups calls error",
 })
-var getBackupDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
+
+var backupDeleteTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "webhook_backup_delete_time_seconds",
+	Help: "Time for last DELETE /backups/{id} call in seconds",
+})
+var backupDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_delete_success_total",
-	Help: "Total DELETE /backup/{id} calls success",
+	Help: "Total DELETE /backups/{id} calls success",
 })
-var getBackupDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+var backupDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "webhook_backup_delete_error_total",
-	Help: "Total DELETE /backup/{id} calls error",
+	Help: "Total DELETE /backups/{id} calls error",
 })
 
 //avoid doing webhook operations in parallel
 var webhookLock = &sync.Mutex{}
 
 func initWebhook() {
-	prometheus.MustRegister(getBackupInfoSuccessCounter)
-	prometheus.MustRegister(getBackupInfoErrorCounter)
-	prometheus.MustRegister(getBackupCreateSuccessCounter)
-	prometheus.MustRegister(getBackupCreateErrorCounter)
-	prometheus.MustRegister(getBackupDeleteSuccessCounter)
-	prometheus.MustRegister(getBackupDeleteErrorCounter)
+	prometheus.MustRegister(backupInfoTimeGauge)
+	prometheus.MustRegister(backupInfoSuccessCounter)
+	prometheus.MustRegister(backupInfoErrorCounter)
+	prometheus.MustRegister(backupCreateTimeGauge)
+	prometheus.MustRegister(backupCreateSuccessCounter)
+	prometheus.MustRegister(backupCreateErrorCounter)
+	prometheus.MustRegister(backupDeleteTimeGauge)
+	prometheus.MustRegister(backupDeleteSuccessCounter)
+	prometheus.MustRegister(backupDeleteErrorCounter)
 }
 
 func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
@@ -57,10 +74,11 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 	defer webhookLock.Unlock()
 	logrus.Debugf("getWebhookBackupInfo %s - acquired lock", backupID)
 	logrus.Debug(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
+	start := time.Now()
 	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook GET backup status invocation failed. err=%s", err)
-		getBackupInfoErrorCounter.Inc()
+		backupInfoErrorCounter.Inc()
 		return ResponseWebhook{}, fmt.Errorf("Webhook GET backup status invocation failed. err=%s", err)
 	}
 	if resp.StatusCode == 200 {
@@ -68,15 +86,16 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 		err = json.Unmarshal(data, &respData)
 		if err != nil {
 			logrus.Errorf("Error parsing json. err=%s", err)
-			getBackupInfoErrorCounter.Inc()
+			backupInfoErrorCounter.Inc()
 			return ResponseWebhook{}, err
 		} else {
-			getBackupInfoSuccessCounter.Inc()
+			backupInfoSuccessCounter.Inc()
+			backupInfoTimeGauge.Set(float64(time.Now().Sub(start).Seconds()))
 			return respData, nil
 		}
 	} else {
 		logrus.Warnf("Webhook status != 200 resp=%s", resp)
-		getBackupInfoErrorCounter.Inc()
+		backupInfoErrorCounter.Inc()
 		return ResponseWebhook{}, fmt.Errorf("Couldn't get backup info")
 	}
 }
@@ -86,10 +105,11 @@ func createWebhookBackup() (ResponseWebhook, error) {
 	webhookLock.Lock()
 	defer webhookLock.Unlock()
 	logrus.Debugf("createWebhookBackup - acquired lock")
+	start := time.Now()
 	resp, data, err := postHTTP(options.webhookURL, options.webhookCreateBody)
 	if err != nil {
 		logrus.Errorf("Webhook POST new backup invocation failed. err=%s", err)
-		getBackupCreateErrorCounter.Inc()
+		backupCreateErrorCounter.Inc()
 		return ResponseWebhook{}, err
 	}
 	if resp.StatusCode == 201 {
@@ -97,15 +117,16 @@ func createWebhookBackup() (ResponseWebhook, error) {
 		err = json.Unmarshal(data, &respData)
 		if err != nil {
 			logrus.Errorf("Error parsing json. err=%s", err)
-			getBackupCreateErrorCounter.Inc()
+			backupCreateErrorCounter.Inc()
 			return ResponseWebhook{}, fmt.Errorf("Error parsing json. err=%s", err)
 		} else {
-			getBackupCreateSuccessCounter.Inc()
+			backupCreateSuccessCounter.Inc()
+			backupCreateTimeGauge.Set(float64(time.Now().Sub(start).Seconds()))
 			return respData, nil
 		}
 	} else {
 		logrus.Warnf("Webhook status != 201. resp=%s", resp)
-		getBackupCreateErrorCounter.Inc()
+		backupCreateErrorCounter.Inc()
 		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response")
 	}
 }
@@ -115,23 +136,25 @@ func deleteWebhookBackup(backupID string) error {
 	webhookLock.Lock()
 	defer webhookLock.Unlock()
 	logrus.Debugf("deleteWebhookBackup %s - acquired lock", backupID)
+	start := time.Now()
 	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook DELETE backup invocation failed. err=%s", err)
-		getBackupDeleteErrorCounter.Inc()
+		backupDeleteErrorCounter.Inc()
 		return err
 	}
 	if resp.StatusCode == 200 {
 		logrus.Debugf("Webhook DELETE successful")
-		getBackupDeleteSuccessCounter.Inc()
+		backupDeleteSuccessCounter.Inc()
+		backupDeleteTimeGauge.Set(float64(time.Now().Sub(start).Seconds()))
 		return nil
 	} else if resp.StatusCode == 404 {
 		logrus.Warnf("Webhook DELETE appears to be successful. Return was 404 NOT FOUND.")
-		getBackupDeleteSuccessCounter.Inc()
+		backupDeleteSuccessCounter.Inc()
 		return nil
 	} else {
 		logrus.Warnf("Webhook status != 200. resp=%s", resp)
-		getBackupDeleteErrorCounter.Inc()
+		backupDeleteErrorCounter.Inc()
 		return fmt.Errorf("Webhook status != 200. resp=%v", resp)
 	}
 }

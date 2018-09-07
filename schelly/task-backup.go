@@ -9,6 +9,16 @@ import (
 )
 
 //METRICS
+var backupLastSizeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "backup_last_size_bytes",
+	Help: "Last successful backup size in bytes",
+})
+
+var backupLastTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+	Name: "backup_last_time_seconds",
+	Help: "Last successful backup time",
+})
+
 var backupTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Name: "backup_tasks_total",
 	Help: "Total backup tasks triggered",
@@ -81,6 +91,8 @@ var backupsTaggedCounter = prometheus.NewCounter(prometheus.CounterOpts{
 var runningBackupTask = false
 
 func initBackup() {
+	prometheus.MustRegister(backupLastSizeGauge)
+	prometheus.MustRegister(backupLastTimeGauge)
 	prometheus.MustRegister(backupTasksCounter)
 	prometheus.MustRegister(backupTasksSuccessCounter)
 	prometheus.MustRegister(backupTasksSkippedCounter)
@@ -173,6 +185,10 @@ func triggerNewBackup() (ResponseWebhook, error) {
 				} else {
 					logrus.Debug("Backups tagging run successfuly")
 					backupSuccessCounter.Inc()
+					if resp.Size != 0 {
+						backupLastSizeGauge.Set(float64(resp.Size))
+					}
+					backupLastTimeGauge.Set(float64(time.Now().Sub(start).Seconds()))
 				}
 			}
 		} else if resp.Status == "running" {
@@ -341,6 +357,11 @@ func checkBackupTask() {
 				} else {
 					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
+					backupSuccessCounter.Inc()
+					if resp.Size != 0 {
+						backupLastSizeGauge.Set(float64(resp.Size))
+					}
+					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
 				}
 			}
 			checkGraceTime()

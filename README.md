@@ -94,8 +94,9 @@ The webhook server must expose the following REST endpoints:
       ```
         {
            id:{alphanumeric-backup-id},
-           status:{backup-status}
-           message:{backend-message}
+           status:{backup-status},
+           message:{backend-message},
+           size:{backup-size-bytes}
         }
       ```
       - status must be one of:
@@ -127,8 +128,9 @@ The webhook server must expose the following REST endpoints:
       ```
         {
            id:{alphanumeric-backup-id},
-           status:{backup-status}
-           message:{backend-message}
+           status:{backup-status},
+           message:{backend-message},
+           size:{backup-size-bytes}
         }
       ```
       
