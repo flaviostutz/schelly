@@ -12,12 +12,12 @@ services:
       - LOG_LEVEL=debug
       - BACKUP_NAME=test
       - WEBHOOK_URL=http://schelly-restic:8080/backups
-      - BACKUP_CRON_STRING=0/2 * * * * *
+      - BACKUP_CRON_STRING=0/7 * * * * *
       - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
       # - WEBHOOK_DELETE_BODY=""
       - WEBHOOK_GRACE_TIME=30
-      - RETENTION_MINUTELY=2
+      - RETENTION_MINUTELY=10
       # - RETENTION_HOURLY=""
       # - RETENTION_DAILY=""
       # - RETENTION_WEEKLY=""

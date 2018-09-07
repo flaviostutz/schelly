@@ -5,9 +5,38 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
+//METRICS
+var retentionTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "retention_tasks_total",
+	Help: "Total retention tasks triggered",
+})
+
+var retentionBackupsDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "retention_backup_delete_success_total",
+	Help: "Total retention backups deleted with success",
+})
+
+var retentionBackupsDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "retention_backup_delete_error_total",
+	Help: "Total retention backups deleted with error",
+})
+
+var retentionBackupsRetriesCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "retention_backup_delete_retries_total",
+	Help: "Total retention backup delete retries",
+})
+
 var runningTask = false
+
+func initRetention() {
+	prometheus.MustRegister(retentionTasksCounter)
+	prometheus.MustRegister(retentionBackupsDeleteSuccessCounter)
+	prometheus.MustRegister(retentionBackupsDeleteErrorCounter)
+	prometheus.MustRegister(retentionBackupsRetriesCounter)
+}
 
 func runRetentionTask() {
 	if runningTask {
@@ -24,6 +53,7 @@ func triggerRetentionTask() {
 	start := time.Now()
 	logrus.Info("")
 	logrus.Info(">>>> BACKUP RETENTION MANAGEMENT")
+	retentionTasksCounter.Inc()
 
 	// backups, err := getAllMaterializedBackups(0)
 	// if err != nil {
@@ -50,10 +80,14 @@ func triggerRetentionTask() {
 		ra, _ := res.RowsAffected()
 		if err != nil {
 			logrus.Errorf("Couldn't set status of backup '%s' to 'deleting'. Skipping backup deletion. err=%s", backup.ID, err)
+			retentionBackupsDeleteErrorCounter.Inc()
 		} else if ra != 1 {
 			logrus.Errorf("Strange number of affected rows while setting status of backup '%s' to 'deleting'. Skipping backup deletion. rowsAffected=%d", backup.ID, ra)
+			retentionBackupsDeleteErrorCounter.Inc()
 		} else {
 			performBackupDelete(backup.ID)
+			//give some breath to backed webhook
+			// time.Sleep(1000 * time.Millisecond)
 		}
 	}
 
@@ -69,11 +103,15 @@ func performBackupDelete(backupID string) {
 		if err0 != nil {
 			logrus.Warnf("Could not set backup %s status to 'delete-error'. err=%s", backupID, err0)
 		}
+		retentionBackupsDeleteErrorCounter.Inc()
 	} else {
 		logrus.Infof("Backup '%s' deleted successfuly", backupID)
 		_, err0 := setStatusMaterializedBackup(backupID, "deleted")
 		if err0 != nil {
 			logrus.Warnf("Could not set backup %s status to 'deleted'. err=%s", backupID, err0)
+			retentionBackupsDeleteErrorCounter.Inc()
+		} else {
+			retentionBackupsDeleteSuccessCounter.Inc()
 		}
 	}
 }
@@ -86,6 +124,7 @@ func retryDeleteErrors() {
 	} else if len(backups) > 0 {
 		logrus.Infof("%d backups tagged with 'backup-error' randomly gotten (limiting to 10). retrying to delete them on webhook", len(backups))
 		for _, backup := range backups {
+			retentionBackupsRetriesCounter.Inc()
 			performBackupDelete(backup.ID)
 		}
 	} else {

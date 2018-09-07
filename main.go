@@ -18,6 +18,8 @@ import (
 	_ "github.com/Sirupsen/logrus"
 	_ "github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/prometheus/client_golang/prometheus"
+	_ "github.com/prometheus/client_golang/prometheus/promhttp"
 	_ "github.com/robfig/cron"
 )
 

@@ -140,6 +140,9 @@ func main() {
 
 	logrus.Infof("====Starting Schelly %s====", VERSION)
 
+	initBackup()
+	initRetention()
+	initWebhook()
 	err := initDB()
 	if err != nil {
 		logrus.Errorf("Could not initialized db. err=%s", err)
@@ -157,9 +160,6 @@ func main() {
 
 	logrus.Infof("Starting backup cron with schedule '%s'", options.backupCron)
 	logrus.Infof("Starting retention cron with schedule '%s'", options.retentionCron)
-
-	//for tests
-	// runBackupTask()
 
 	c := cron.New()
 	c.AddFunc(options.backupCron, func() { runBackupTask() })

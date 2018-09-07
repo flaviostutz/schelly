@@ -7,12 +7,28 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
+var apiInvocationsSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "api_invocations_success_total",
+	Help: "Total api requests served with success",
+})
+
+var apiInvocationsErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+	Name: "api_invocations_error_total",
+	Help: "Total api requests served with error",
+})
+
 func startRestAPI() {
+	prometheus.MustRegister(apiInvocationsSuccessCounter)
+	prometheus.MustRegister(apiInvocationsErrorCounter)
+
 	router := mux.NewRouter()
 	router.HandleFunc("/backups", GetBackups).Methods("GET")
 	router.HandleFunc("/backups", TriggerBackup).Methods("POST")
+	router.Handle("/metrics", promhttp.Handler())
 	listen := fmt.Sprintf("%s:%d", options.listenIP, options.listenPort)
 	logrus.Infof("Listening at %s", listen)
 	err := http.ListenAndServe(listen, router)
@@ -30,6 +46,7 @@ func GetBackups(w http.ResponseWriter, r *http.Request) {
 	backups, err := getMaterializedBackups(0, tag, status, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apiInvocationsErrorCounter.Inc()
 		return
 	}
 
@@ -54,6 +71,7 @@ func GetBackups(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte("[" + rjson + "]"))
 	logrus.Debugf("result: %s", "["+rjson+"]")
+	apiInvocationsSuccessCounter.Inc()
 }
 
 //TriggerBackup get currently tracked backups
@@ -62,6 +80,7 @@ func TriggerBackup(w http.ResponseWriter, r *http.Request) {
 	result, err := triggerNewBackup()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
+		apiInvocationsErrorCounter.Inc()
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -71,4 +90,5 @@ func TriggerBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(rs))
 	logrus.Debugf("result: %s", rs)
+	apiInvocationsSuccessCounter.Inc()
 }
