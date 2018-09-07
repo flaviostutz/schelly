@@ -133,6 +133,7 @@ func runBackupTask() {
 			} else {
 				logrus.Errorf("Error triggering backup. Grace time reached. Won't retry anymore. err=%s", err)
 				backupTasksRetryTimeoutCounter.Inc()
+				runningBackupTask = false
 			}
 		} else {
 			logrus.Infof("Backup task done. elapsed=%s", elapsed)
@@ -171,7 +172,7 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	} else {
 		if resp.Status == "available" {
 			logrus.Infof("Backup executed successfuly and is already available. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-			mid, err1 := createMaterializedBackup(resp.ID, resp.Status, startPostTime, time.Now(), resp.Message)
+			mid, err1 := createMaterializedBackup(resp.ID, resp.Status, startPostTime, time.Now(), resp.Message, resp.Size)
 			if err1 != nil {
 				backupErrorCounter.Inc()
 				return resp, fmt.Errorf("Couldn't create materialized backup on database. err=%s", err1)
@@ -351,7 +352,7 @@ func checkBackupTask() {
 		} else {
 			if resp.Status != backupStatus {
 				logrus.Infof("Backup %s finish detected on backend server. status=%s", backupID, resp.Status)
-				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message)
+				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message, resp.Size)
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 				} else {
