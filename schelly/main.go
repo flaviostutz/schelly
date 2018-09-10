@@ -37,10 +37,10 @@ type Options struct {
 
 //ResponseWebhook default response type for webhook invocations
 type ResponseWebhook struct {
-	ID      string `json:"id",omitempty`
-	Status  string `json:"status",omitempty`
-	Message string `json:"message",omitempty`
-	Size    int64  `json:"size",omitempty`
+	ID      string  `json:"id",omitempty`
+	Status  string  `json:"status",omitempty`
+	Message string  `json:"message",omitempty`
+	SizeMB  float64 `json:"size_mb",omitempty`
 }
 
 var options = new(Options)

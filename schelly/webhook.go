@@ -112,7 +112,7 @@ func createWebhookBackup() (ResponseWebhook, error) {
 		backupCreateErrorCounter.Inc()
 		return ResponseWebhook{}, err
 	}
-	if resp.StatusCode == 201 {
+	if resp.StatusCode == 202 {
 		var respData ResponseWebhook
 		err = json.Unmarshal(data, &respData)
 		if err != nil {
@@ -125,7 +125,7 @@ func createWebhookBackup() (ResponseWebhook, error) {
 			return respData, nil
 		}
 	} else {
-		logrus.Warnf("Webhook status != 201. resp=%s", resp)
+		logrus.Warnf("Webhook status != 202. resp=%s", resp)
 		backupCreateErrorCounter.Inc()
 		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response")
 	}
@@ -160,7 +160,7 @@ func deleteWebhookBackup(backupID string) error {
 }
 
 func postHTTP(url string, data string) (http.Response, []byte, error) {
-	req, err := http.NewRequest("POST", options.webhookURL, bytes.NewBuffer([]byte(data)))
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(data)))
 	if err != nil {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
 		return http.Response{}, []byte{}, err

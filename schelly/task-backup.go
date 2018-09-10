@@ -10,7 +10,7 @@ import (
 
 //METRICS
 var backupLastSizeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "backup_last_size_bytes",
+	Name: "backup_last_size_mbytes",
 	Help: "Last successful backup size in bytes",
 })
 
@@ -169,36 +169,13 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	if err1 != nil {
 		backupErrorCounter.Inc()
 		return resp, fmt.Errorf("Couldn't invoke webhook for backup creation. err=%s", err1)
+	} else if resp.Status == "running" {
+		logrus.Infof("Backup invoked successfuly. Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
+		backupRunningCounter.Inc()
+		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	} else {
-		if resp.Status == "available" {
-			logrus.Infof("Backup executed successfuly and is already available. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-			mid, err1 := createMaterializedBackup(resp.ID, resp.Status, startPostTime, time.Now(), resp.Message, resp.Size)
-			if err1 != nil {
-				backupErrorCounter.Inc()
-				return resp, fmt.Errorf("Couldn't create materialized backup on database. err=%s", err1)
-			} else {
-				logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
-				setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
-				err1 = tagAllBackups()
-				if err1 != nil {
-					backupTaggingErrorCounter.Inc()
-					return resp, fmt.Errorf("Cannot tag backups. err=%s", err1)
-				} else {
-					logrus.Debug("Backups tagging run successfuly")
-					backupSuccessCounter.Inc()
-					if resp.Size != 0 {
-						backupLastSizeGauge.Set(float64(resp.Size))
-					}
-					backupLastTimeGauge.Set(float64(time.Now().Sub(start).Seconds()))
-				}
-			}
-		} else if resp.Status == "running" {
-			logrus.Infof("Backup invoked successfuly but it is still running in background (not available yet). Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-			backupRunningCounter.Inc()
-		} else {
-			logrus.Warnf("Backup invoked but an unrecognized status was returned. Won't track it. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-			backupErrorCounter.Inc()
-		}
+		logrus.Warnf("Backup invoked but an unrecognized status was returned. Won't track it. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
+		backupErrorCounter.Inc()
 		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	}
 
@@ -352,17 +329,18 @@ func checkBackupTask() {
 		} else {
 			if resp.Status != backupStatus {
 				logrus.Infof("Backup %s finish detected on backend server. status=%s", backupID, resp.Status)
-				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message, resp.Size)
+				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message, resp.SizeMB)
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 				} else {
 					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
 					backupSuccessCounter.Inc()
-					if resp.Size != 0 {
-						backupLastSizeGauge.Set(float64(resp.Size))
+					if resp.SizeMB != 0 {
+						backupLastSizeGauge.Set(float64(resp.SizeMB))
 					}
 					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
+					tagAllBackups()
 				}
 			}
 			checkGraceTime()

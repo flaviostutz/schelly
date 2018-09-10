@@ -65,7 +65,7 @@ func GetBackups(w http.ResponseWriter, r *http.Request) {
 		if rjson != "" {
 			rjson = rjson + ","
 		}
-		rjson = rjson + "{\"id\":\"" + b.ID + "\", \"status\":\"" + b.Status + "\", \"start_time\":\"" + fmt.Sprintf("%s", b.StartTime) + "\", \"end_time\":\"" + fmt.Sprintf("%s", b.EndTime) + "\", \"size\":\"" + fmt.Sprintf("%d", b.Size) + "\", \"custom_data\":\"" + b.CustomData + "\", \"tags\":[" + tags + "]}"
+		rjson = rjson + "{\"id\":\"" + b.ID + "\", \"status\":\"" + b.Status + "\", \"start_time\":\"" + fmt.Sprintf("%s", b.StartTime) + "\", \"end_time\":\"" + fmt.Sprintf("%s", b.EndTime) + "\", \"size\":\"" + fmt.Sprintf("%f", b.SizeMB) + "\", \"custom_data\":\"" + b.CustomData + "\", \"tags\":[" + tags + "]}"
 	}
 
 	w.Header().Set("Content-Type", "application/json")

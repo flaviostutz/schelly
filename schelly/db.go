@@ -30,7 +30,7 @@ type MaterializedBackup struct {
 	EndTime    time.Time
 	Status     string
 	CustomData string
-	Size       int64
+	SizeMB     float64
 	Reference  int
 	Minutely   int
 	Hourly     int
@@ -50,7 +50,7 @@ func initDB() error {
 	if err != nil {
 		return err
 	}
-	statement, err1 := db0.Prepare("CREATE TABLE IF NOT EXISTS materialized_backup (id TEXT NOT NULL, status TEXT NOT NULL, start_time TIMESTAMP NOT NULL, end_time TIMESTAMP NOT NULL DEFAULT `2000-01-01`, custom_data TEXT NOT NULL DEFAULT ``, size INTEGER, minutely INTEGER NOT NULL DEFAULT 0, hourly INTEGER NOT NULL DEFAULT 0, daily INTEGER NOT NULL DEFAULT 0, weekly INTEGER NOT NULL DEFAULT 0, monthly INTEGER NOT NULL DEFAULT 0, yearly INTEGER NOT NULL DEFAULT 0, reference INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
+	statement, err1 := db0.Prepare("CREATE TABLE IF NOT EXISTS materialized_backup (id TEXT NOT NULL, status TEXT NOT NULL, start_time TIMESTAMP NOT NULL, end_time TIMESTAMP NOT NULL DEFAULT `2000-01-01`, custom_data TEXT NOT NULL DEFAULT ``, size REAL, minutely INTEGER NOT NULL DEFAULT 0, hourly INTEGER NOT NULL DEFAULT 0, daily INTEGER NOT NULL DEFAULT 0, weekly INTEGER NOT NULL DEFAULT 0, monthly INTEGER NOT NULL DEFAULT 0, yearly INTEGER NOT NULL DEFAULT 0, reference INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))")
 	if err1 != nil {
 		return err1
 	}
@@ -89,7 +89,7 @@ func getCurrentTaskStatus() (string, string, time.Time, error) {
 	return params[0], params[1], t, nil
 }
 
-func createMaterializedBackup(backupID string, status string, startDate time.Time, endDate time.Time, customData string, size int64) (string, error) {
+func createMaterializedBackup(backupID string, status string, startDate time.Time, endDate time.Time, customData string, size float64) (string, error) {
 	stmt, err1 := db.Prepare("INSERT INTO materialized_backup (id, status, start_time, end_time, custom_data, size) values(?,?,?,?,?,?)")
 	if err1 != nil {
 		return "", err1
@@ -114,7 +114,7 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Size, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			metricsSQLErrorCounter.Inc()
 			return MaterializedBackup{}, err2
@@ -166,7 +166,7 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 	var backups = make([]MaterializedBackup, 0)
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Size, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			metricsSQLErrorCounter.Inc()
 			return []MaterializedBackup{}, err2

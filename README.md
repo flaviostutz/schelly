@@ -72,11 +72,8 @@ format "header1=contents1,header2=contents2"
            custom_data:{data returned from webhook}
         }
       ```
-      - status must be one of:
-          - 'running' - backup is not finished yet
-          - 'available' - backup has completed successfuly
-            
-    - Status code 201 if created successfuly
+      - status must be always 'running' (check for backup completion later using GET /backups/{id})
+      - status code must be 202 if backup request accepted
 
 
 # Webhook spec
@@ -95,15 +92,11 @@ The webhook server must expose the following REST endpoints:
         {
            id:{alphanumeric-backup-id},
            status:{backup-status},
-           message:{backend-message},
-           size:{backup-size-bytes}
+           message:{backend-message}
         }
       ```
-      - status must be one of:
-          - 'running' - backup is not finished yet
-          - 'available' - backup has completed successfuly
-      
-    - Status code 201 if created successfuly
+      - status must be always 'running' (check for backup completion later using GET /backups/{id})
+      - status code must be 202 if backup request accepted
 
   - ```GET {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to query a specific backup instance
@@ -115,6 +108,7 @@ The webhook server must expose the following REST endpoints:
            id:{id},
            status:{backup-status},
            message:{backend message}
+           size_mb:{backup-size-mbytes}
          }
        ```
     - Status code: 200 if found, 404 if not found
@@ -130,7 +124,6 @@ The webhook server must expose the following REST endpoints:
            id:{alphanumeric-backup-id},
            status:{backup-status},
            message:{backend-message},
-           size:{backup-size-bytes}
         }
       ```
       

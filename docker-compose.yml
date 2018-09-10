@@ -7,11 +7,11 @@ services:
       context: .
       target: IMAGE
     ports:
-      - 7070:8080
+      - 8080:8080
     environment:
       - LOG_LEVEL=debug
       - BACKUP_NAME=test
-      - WEBHOOK_URL=http://192.168.2.17:8080/backups
+      - WEBHOOK_URL=http://172.20.10.2:7070/backups
       - BACKUP_CRON_STRING=0/3 * * * * *
       - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
@@ -27,7 +27,7 @@ services:
   schelly-restic:
     image: flaviostutz/schelly-restic
     ports:
-      - 8080:8080
+      - 7070:7070
     environment:
       - RESTIC_PASSWORD=123
       - LOG_LEVEL=debug
