@@ -106,30 +106,21 @@ The webhook server must expose the following REST endpoints:
        ```
          {
            id:{id},
-           data_id:{underlaying data id, if different from id},
+           data_id:{underlaying data id, or the same as id when not known yet},
            status:{backup-status},
            message:{backend message}
            size_mb:{backup-size-mbytes}
          }
        ```
     - Status code: 200 if found, 404 if not found
-
+    - data_id: the backup creation webhook (POST /backups) must return immediately with an backup id that can be used for later cancellation (DELETE /backups/{id}). In many cases the backup webhook creates an id for the backup before the underlaying data backup is called or even finished (for example, when there are pre-backup commands or the backup storage mechanism only returns an id when finished). This field will have the underlaying data storage backup id, so that you will know what is the real reference in the underlaying storage when you need to restore or manage it.
+    
   - ```DELETE {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to trigger a new backup
     - Request body: json ```{webhook-delete-body}```
     - Request header: ```{webhook-headers}```
-    - Response body: json 
-     
-      ```
-        {
-           id:{alphanumeric-backup-id},
-           status:{backup-status},
-           message:{backend-message},
-        }
-      ```
-      
+    - Response body: empty
     - Status code 200 if deleted successfuly
-
 
 #### Retention config:
   - *[retention count]@[reference]*, where
