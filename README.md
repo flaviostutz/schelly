@@ -106,6 +106,7 @@ The webhook server must expose the following REST endpoints:
        ```
          {
            id:{id},
+           data_id:{underlaying data id, if different from id},
            status:{backup-status},
            message:{backend message}
            size_mb:{backup-size-mbytes}

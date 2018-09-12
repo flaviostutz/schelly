@@ -2,6 +2,7 @@ package main
 
 import (
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -31,6 +32,9 @@ var retentionBackupsRetriesCounter = prometheus.NewCounter(prometheus.CounterOpt
 
 var runningTask = false
 
+//avoid doing webhook operations in parallel
+var avoidRetentionLock = &sync.Mutex{}
+
 func initRetention() {
 	prometheus.MustRegister(retentionTasksCounter)
 	prometheus.MustRegister(retentionBackupsDeleteSuccessCounter)
@@ -55,12 +59,9 @@ func triggerRetentionTask() {
 	logrus.Info(">>>> BACKUP RETENTION MANAGEMENT")
 	retentionTasksCounter.Inc()
 
-	// backups, err := getAllMaterializedBackups(0)
-	// if err != nil {
-	// 	logrus.Errorf("Couldn't get materialized_backups. err=%s", err)
-	// 	return
-	// }
-	// logrus.Debugf("Found %d backup references in local database", len(backups))
+	avoidRetentionLock.Lock()
+
+	tagAllBackups()
 
 	logrus.Debugf("Retention policy: minutely=%s, hourly=%s, daily=%s, weekly=%s, monthly=%s, yearly=%s", options.minutelyParams[0], options.hourlyParams[0], options.dailyParams[0], options.weeklyParams[0], options.monthlyParams[0], options.yearlyParams[0])
 
@@ -93,6 +94,7 @@ func triggerRetentionTask() {
 
 	elapsed := time.Now().Sub(start)
 	logrus.Infof("Retention management task done. elapsed=%s", elapsed)
+	avoidRetentionLock.Unlock()
 }
 
 func performBackupDelete(backupID string) {

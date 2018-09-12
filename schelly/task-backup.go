@@ -233,15 +233,6 @@ func tagAllBackups() error {
 	}
 	logrus.Debugf("%d rows affected", mu(res.RowsAffected())[0])
 
-	//weekly
-	// logrus.Debugf("Marking weekly tags")
-	// err = markTagMaterializedBackup(tx *sql.Tx, "weekly", "%Y-%m-%dT%H:0:0.000", "%M", options.hourlyParams[1])
-	// if err != nil {
-	// 	logrus.Errorf("Error marking hourly tags. err=%s", err)
-	// 	tx.Rollback()
-	// 	return
-	// }
-
 	//daily
 	logrus.Debugf("Marking daily tags")
 	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", options.dailyParams[1])
@@ -329,9 +320,12 @@ func checkBackupTask() {
 		} else {
 			if resp.Status != backupStatus {
 				logrus.Infof("Backup %s finish detected on backend server. status=%s", backupID, resp.Status)
-				mid, err1 := createMaterializedBackup(resp.ID, resp.Status, backupDate, time.Now(), resp.Message, resp.SizeMB)
+				//avoid doing retention until the newly created backup is tagged to avoid it to be elected for removal (because it will have no tags)
+				avoidRetentionLock.Lock()
+				mid, err1 := createMaterializedBackup(resp.ID, resp.DataID, resp.Status, backupDate, time.Now(), resp.Message, resp.SizeMB)
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
+					avoidRetentionLock.Unlock()
 				} else {
 					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
@@ -341,6 +335,7 @@ func checkBackupTask() {
 					}
 					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
 					tagAllBackups()
+					avoidRetentionLock.Unlock()
 				}
 			}
 			checkGraceTime()

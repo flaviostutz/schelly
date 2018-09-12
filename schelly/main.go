@@ -38,6 +38,7 @@ type Options struct {
 //ResponseWebhook default response type for webhook invocations
 type ResponseWebhook struct {
 	ID      string  `json:"id",omitempty`
+	DataID  string  `json:"data_id",omitempty`
 	Status  string  `json:"status",omitempty`
 	Message string  `json:"message",omitempty`
 	SizeMB  float64 `json:"size_mb",omitempty`
@@ -164,7 +165,7 @@ func main() {
 
 	c := cron.New()
 	c.AddFunc(options.backupCron, func() { runBackupTask() })
-	c.AddFunc("@every 1s", func() { checkBackupTask() })
+	c.AddFunc("@every 5s", func() { checkBackupTask() })
 	c.AddFunc(options.retentionCron, func() { runRetentionTask() })
 	c.AddFunc("@every 1d", func() { retryDeleteErrors() })
 	go c.Start()

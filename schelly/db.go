@@ -26,6 +26,7 @@ var metricsSQLErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
 //MaterializedBackup backup record
 type MaterializedBackup struct {
 	ID         string
+	DataID     string
 	StartTime  time.Time
 	EndTime    time.Time
 	Status     string
@@ -89,12 +90,12 @@ func getCurrentTaskStatus() (string, string, time.Time, error) {
 	return params[0], params[1], t, nil
 }
 
-func createMaterializedBackup(backupID string, status string, startDate time.Time, endDate time.Time, customData string, size float64) (string, error) {
-	stmt, err1 := db.Prepare("INSERT INTO materialized_backup (id, status, start_time, end_time, custom_data, size) values(?,?,?,?,?,?)")
+func createMaterializedBackup(backupID string, dataID string, status string, startDate time.Time, endDate time.Time, customData string, size float64) (string, error) {
+	stmt, err1 := db.Prepare("INSERT INTO materialized_backup (id, data_id, status, start_time, end_time, custom_data, size) values(?,?,?,?,?,?,?)")
 	if err1 != nil {
 		return "", err1
 	}
-	_, err2 := stmt.Exec(backupID, status, startDate, endDate, customData, size)
+	_, err2 := stmt.Exec(backupID, dataID, status, startDate, endDate, customData, size)
 	if err2 != nil {
 		metricsSQLErrorCounter.Inc()
 		return "", err2
@@ -105,7 +106,7 @@ func createMaterializedBackup(backupID string, status string, startDate time.Tim
 }
 
 func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
-	rows, err1 := db.Query("SELECT id,status,start_time,end_time,custom_data,size,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE id='" + backupID + "'")
+	rows, err1 := db.Query("SELECT id,data_id,status,start_time,end_time,custom_data,size,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE id='" + backupID + "'")
 	if err1 != nil {
 		metricsSQLErrorCounter.Inc()
 		return MaterializedBackup{}, err1
@@ -114,7 +115,7 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			metricsSQLErrorCounter.Inc()
 			return MaterializedBackup{}, err2
@@ -151,7 +152,7 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 	if randomOrder {
 		orderBy = "RANDOM()"
 	}
-	q := "SELECT id,status,start_time,end_time,custom_data,size,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup " + where + " ORDER BY " + orderBy
+	q := "SELECT id,data_id,status,start_time,end_time,custom_data,size,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup " + where + " ORDER BY " + orderBy
 	if limit != 0 {
 		q = q + fmt.Sprintf(" LIMIT %d", limit)
 	}
@@ -166,7 +167,7 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 	var backups = make([]MaterializedBackup, 0)
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			metricsSQLErrorCounter.Inc()
 			return []MaterializedBackup{}, err2
@@ -203,7 +204,7 @@ func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int
 		}
 	}
 
-	q := fmt.Sprintf("SELECT id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE %s AND status='available' ORDER BY start_time DESC LIMIT %d OFFSET %d", whereTags, limit, skipNewestCount)
+	q := fmt.Sprintf("SELECT id,data_id,status,start_time,end_time,custom_data,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE %s AND status='available' ORDER BY start_time DESC LIMIT %d OFFSET %d", whereTags, limit, skipNewestCount)
 	logrus.Debugf("getExclusiveTags query=%s", q)
 	rows, err1 := db.Query(q)
 	if err1 != nil {
@@ -215,7 +216,7 @@ func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int
 	var backups = make([]MaterializedBackup, 0)
 	for rows.Next() {
 		backup := MaterializedBackup{}
-		err2 := rows.Scan(&backup.ID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
+		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
 			metricsSQLErrorCounter.Inc()
 			return []MaterializedBackup{}, err2
