@@ -1,7 +1,9 @@
 # schelly
 Schelly is a backup tool focused on the scheduling stuff, so that the heavy lifting is performed by specialized storage/database tools. You can use any backup backend as soon as it is exposed by a simple REST API.
 
-![](diagram1.png?raw=true)
+<p align="center">
+  <img width="700" src="diagram1.png?raw=true">
+</p>
 
 The triggering and retainment of backups are based on the functional perception of backups, so you configure:
    - Triggering cron string: cron string that defines when a new backup will be created (by calling a backend backup webhook, as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
