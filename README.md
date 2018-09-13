@@ -38,7 +38,7 @@ format "header1=contents1,header2=contents2"
 * WEBHOOK_BODY - custom data to be sent as the body for webhook calls to backup backends
 * GRACE\_TIME\_SECONDS - when trying to run a new backup task, if a previous task is still running because it didn't finish yet, check for this parameter. if the time elapsed for the running task is greater than this parameter, try to cancel it by emitting a DELETE webhook and start the new task, else mark the new task as SKIPPED and keep the running task as is.
 
-# REST API
+# Scheduler REST API
 
   - ```GET /backups```
     - Query backups managed by Schelly
@@ -86,7 +86,7 @@ format "header1=contents1,header2=contents2"
       - status code must be 202 if backup request accepted
 
 
-# Backup Repository API Spec
+# Backup Repository REST API Spec
 
 will be invoked when Schelly needs to create/delete a backup on a backend server
 
