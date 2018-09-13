@@ -1,6 +1,8 @@
 # schelly
 Schelly is a backup tool focused on the scheduling stuff, so that the heavy lifting is performed by specialized storage/database tools. You can use any backup backend as soon as it is exposed by a simple REST API.
 
+![](diagram1.png?raw=true)
+
 The triggering and retainment of backups are based on the functional perception of backups, so you configure:
    - Triggering cron string: cron string that defines when a new backup will be created (by calling a backend backup webhook, as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
    - Retention policies: for how long do a backup must be retained? It depends on what the user needs when something goes wrong. In general, the more recent, more backups in time you need. By default, Schelly will try to keep something like (if a backup is outside this, the webhook for backup removal will be called):
@@ -8,6 +10,12 @@ The triggering and retainment of backups are based on the functional perception 
        - the last 4 weekly backps
        - the last 3 monthly backups
        - the last 2 yearly backups
+
+So, Schelly, based on those retention parameters, will call "POST /backup" or "DELETE /backup/{someid}" on backup backend server in order to maintain what we need as a backup that can save our souls! 
+
+Some Schelly compatible backends are [Schelly Restic](https://github.com/flaviostutz/schelly-restic) and [Schelly Backy2](https://github.com/flaviostutz/schelly-backy2). If you wish to create your own webhook bridge, try to use [Schelly Webhook](https://github.com/flaviostutz/schelly-webhook), a Go library to help creating a Schelly compatible backup backend server.
+
+Hope this can help you!
 
 # ENV configurations
 
@@ -114,7 +122,7 @@ The webhook server must expose the following REST endpoints:
        ```
     - Status code: 200 if found, 404 if not found
     - data_id: the backup creation webhook (POST /backups) must return immediately with an backup id that can be used for later cancellation (DELETE /backups/{id}). In many cases the backup webhook creates an id for the backup before the underlaying data backup is called or even finished (for example, when there are pre-backup commands or the backup storage mechanism only returns an id when finished). This field will have the underlaying data storage backup id, so that you will know what is the real reference in the underlaying storage when you need to restore or manage it.
-    
+
   - ```DELETE {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to trigger a new backup
     - Request body: json ```{webhook-delete-body}```
