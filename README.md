@@ -208,7 +208,7 @@ Please submit your issues and pull requests here!
 
 # Some details
 
-* Schelly will avoid performing concurrent invocations on webhook api
+* Schelly will avoid performing concurrent invocations on webhook API
 
 * If a backup fails (POST /backup webhook returns something different from 201), it will wait 5 seconds and retry again until 'grace time'
 
