@@ -19,6 +19,40 @@ Some Schelly compatible backends are [Schelly Restic](https://github.com/flavios
 
 Hope this can help you!
 
+# Run
+
+* copy docker-compose.yml
+
+```
+version: '3.5'
+
+services:
+
+  schelly:
+    build:
+      context: .
+      target: IMAGE
+    ports:
+      - 8080:8080
+    environment:
+      - LOG_LEVEL=debug
+      - BACKUP_NAME=test
+      - WEBHOOK_URL=http://schelly-restic:7070/backups
+      - BACKUP_CRON_STRING=0/3 * * * * *
+      - RETENTION_MINUTELY=10
+
+  schelly-restic:
+    image: flaviostutz/schelly-restic
+    ports:
+      - 7070:7070
+    environment:
+      - RESTIC_PASSWORD=123
+      - LOG_LEVEL=debug
+```
+
+* execute ```docker-compose up``` and see logs
+* run ```curl localhost:7070/backups```
+
 # ENV configurations
 
 * BACKUP_NAME - the name of the backup used as webhook prefix /[backup name]
@@ -164,9 +198,28 @@ The webhook server must expose the following REST endpoints:
   * Trigger a backup every 4 hours and keep 6 of them, deleting older ones.
   * Mark the backup created on the last day of the month near 3 am as 'monthly' and keep 2 of them.
 
-# More info
+# Monitoring
+
+Schelly has a /metrics endpoint compatible with Prometheus
+
+# Contribute
+
+Please submit your issues and pull requests here!
+
+# Some details
 
 * Schelly will avoid performing concurrent invocations on webhook API
+
+* Schelly will avoid performing concurrent invocations on webhook API
+
 * If a backup fails (POST /backup webhook returns something different from 201), it will wait 5 seconds and retry again until 'grace time'
+
 * If a backup deletion fails (DELETE /backup/{backupid} returns something different from 200), it will mark backup with status 'delete-error' and once a day will randomly retry to delete some of them.
 
+# More resources
+
+* https://github.com/flaviostutz/schelly-webhook
+* https://github.com/flaviostutz/schelly-grafana
+* https://github.com/flaviostutz/schelly-backy2
+  * Clone this if you want to create your own Backup Repo
+* https://github.com/flaviostutz/schelly-restic
