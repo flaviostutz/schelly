@@ -48,6 +48,10 @@ services:
     environment:
       - RESTIC_PASSWORD=123
       - LOG_LEVEL=debug
+      - PRE_BACKUP_COMMAND=dd if=/dev/zero of=/backup-source/TESTFILE bs=100MB count=2
+      - POST_BACKUP_COMMAND=rm /backup-source/TESTFILE
+      - SOURCE_DATA_PATH=/backup-source/TESTFILE
+      - TARGET_DATA_PATH=/backup-repo
 ```
 
 * execute ```docker-compose up``` and see logs
@@ -219,5 +223,5 @@ Please submit your issues and pull requests here!
 * https://github.com/flaviostutz/schelly-webhook
 * https://github.com/flaviostutz/schelly-grafana
 * https://github.com/flaviostutz/schelly-backy2
-  * Clone this if you want to create your own Backup Repo
+  * Clone this if you want to create your own Backuper
 * https://github.com/flaviostutz/schelly-restic
