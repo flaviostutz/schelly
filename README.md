@@ -144,7 +144,7 @@ The webhook server must expose the following REST endpoints:
         }
       ```
       - status must be always 'running' (check for backup completion later using GET /backups/{id})
-      - status code must be 202 if backup request accepted
+      - status code must be 202 if backup request accepted. The backup must be performed assynchronously and Schelly will monitor completion by polling GET {webhook-url}/{backup-id}, waiting for "status" == "available"
 
   - ```GET {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to query a specific backup instance
