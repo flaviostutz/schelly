@@ -14,19 +14,10 @@ import (
 )
 
 //METRICS
-var invocationTimeGauge = prometheus.NewGaugeVec(prometheus.GaugeOpts{
-	Name: "schelly_webhook_time_seconds",
-	Help: "Duration of last call to webhook endpoints",
-}, []string{
-	// which webhook operation?
-	"operation",
-	// webhook operation result
-	"status",
-})
-
-var invocationCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "schelly_webhook_invocation_total",
-	Help: "Webhook endpoints invocation counter",
+var invocationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+	Name:    "schelly_webhook_invocation",
+	Help:    "Total duration of webhook calls",
+	Buckets: []float64{0.1, 3, 10},
 }, []string{
 	// which webhook operation?
 	"operation",
@@ -38,8 +29,7 @@ var invocationCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 var webhookLock = &sync.Mutex{}
 
 func initWebhook() {
-	prometheus.MustRegister(invocationTimeGauge)
-	prometheus.MustRegister(invocationCounter)
+	prometheus.MustRegister(invocationHist)
 }
 
 func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
@@ -52,8 +42,7 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook GET backup status invocation failed. err=%s", err)
-		invocationTimeGauge.WithLabelValues("info", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("info", "error").Inc()
+		invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
 		return ResponseWebhook{}, fmt.Errorf("Webhook GET backup status invocation failed. err=%s", err)
 	}
 	if resp.StatusCode == 200 {
@@ -61,18 +50,15 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 		err = json.Unmarshal(data, &respData)
 		if err != nil {
 			logrus.Errorf("Error parsing json. err=%s", err)
-			invocationTimeGauge.WithLabelValues("info", "error").Set(float64(time.Since(start).Seconds()))
-			invocationCounter.WithLabelValues("info", "error").Inc()
+			invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
 			return ResponseWebhook{}, err
 		} else {
-			invocationTimeGauge.WithLabelValues("info", "success").Set(float64(time.Since(start).Seconds()))
-			invocationCounter.WithLabelValues("info", "success").Inc()
+			invocationHist.WithLabelValues("info", "success").Observe(float64(time.Since(start).Seconds()))
 			return respData, nil
 		}
 	} else {
 		logrus.Warnf("Webhook status != 200 resp=%s", resp)
-		invocationTimeGauge.WithLabelValues("info", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("info", "error").Inc()
+		invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
 		return ResponseWebhook{}, fmt.Errorf("Couldn't get backup info")
 	}
 }
@@ -86,8 +72,7 @@ func createWebhookBackup() (ResponseWebhook, error) {
 	resp, data, err := postHTTP(options.webhookURL, options.webhookCreateBody)
 	if err != nil {
 		logrus.Errorf("Webhook POST new backup invocation failed. err=%s", err)
-		invocationTimeGauge.WithLabelValues("create", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("create", "error").Inc()
+		invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
 		return ResponseWebhook{}, err
 	}
 	if resp.StatusCode == 202 {
@@ -95,18 +80,15 @@ func createWebhookBackup() (ResponseWebhook, error) {
 		err = json.Unmarshal(data, &respData)
 		if err != nil {
 			logrus.Errorf("Error parsing json. err=%s", err)
-			invocationTimeGauge.WithLabelValues("create", "error").Set(float64(time.Since(start).Seconds()))
-			invocationCounter.WithLabelValues("create", "error").Inc()
+			invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
 			return ResponseWebhook{}, fmt.Errorf("Error parsing json. err=%s", err)
 		} else {
-			invocationTimeGauge.WithLabelValues("create", "success").Set(float64(time.Since(start).Seconds()))
-			invocationCounter.WithLabelValues("create", "success").Inc()
+			invocationHist.WithLabelValues("create", "success").Observe(float64(time.Since(start).Seconds()))
 			return respData, nil
 		}
 	} else {
 		logrus.Warnf("Webhook status != 202. resp=%s", resp)
-		invocationTimeGauge.WithLabelValues("create", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("create", "error").Inc()
+		invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
 		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response")
 	}
 }
@@ -120,24 +102,20 @@ func deleteWebhookBackup(backupID string) error {
 	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook DELETE backup invocation failed. err=%s", err)
-		invocationTimeGauge.WithLabelValues("delete", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("delete", "error").Inc()
+		invocationHist.WithLabelValues("delete", "error").Observe(float64(time.Since(start).Seconds()))
 		return err
 	}
 	if resp.StatusCode == 200 {
 		logrus.Debugf("Webhook DELETE successful")
-		invocationTimeGauge.WithLabelValues("delete", "success").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("delete", "success").Inc()
+		invocationHist.WithLabelValues("delete", "success").Observe(float64(time.Since(start).Seconds()))
 		return nil
 	} else if resp.StatusCode == 404 {
 		logrus.Warnf("Webhook DELETE appears to be successful. Return was 404 NOT FOUND.")
-		invocationTimeGauge.WithLabelValues("delete", "success").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("delete", "success").Inc()
+		invocationHist.WithLabelValues("delete", "success").Observe(float64(time.Since(start).Seconds()))
 		return nil
 	} else {
 		logrus.Warnf("Webhook status != 200. resp=%s", resp)
-		invocationTimeGauge.WithLabelValues("delete", "error").Set(float64(time.Since(start).Seconds()))
-		invocationCounter.WithLabelValues("delete", "error").Inc()
+		invocationHist.WithLabelValues("delete", "error").Observe(float64(time.Since(start).Seconds()))
 		return fmt.Errorf("Webhook status != 200. resp=%v", resp)
 	}
 }
