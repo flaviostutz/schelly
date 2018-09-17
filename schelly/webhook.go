@@ -15,41 +15,41 @@ import (
 
 //METRICS
 var backupInfoTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "webhook_backup_info_time_seconds",
+	Name: "schelly_webhook_backup_info_time_seconds",
 	Help: "Time for last POST /backups/{id} call in seconds",
 })
 var backupInfoSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_info_success_total",
+	Name: "schelly_webhook_backup_info_success_total",
 	Help: "Total GET /backups/{id} calls success",
 })
 var backupInfoErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_info_error_total",
+	Name: "schelly_webhook_backup_info_error_total",
 	Help: "Total GET /backups/{id} calls error",
 })
 
 var backupCreateTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "webhook_backup_create_time_seconds",
+	Name: "schelly_webhook_backup_create_time_seconds",
 	Help: "Time for last POST /backups call in seconds",
 })
 var backupCreateSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_create_success_total",
+	Name: "schelly_webhook_backup_create_success_total",
 	Help: "Total POST /backups calls success",
 })
 var backupCreateErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_create_error_total",
+	Name: "schelly_webhook_backup_create_error_total",
 	Help: "Total POST /backups calls error",
 })
 
 var backupDeleteTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "webhook_backup_delete_time_seconds",
+	Name: "schelly_webhook_backup_delete_time_seconds",
 	Help: "Time for last DELETE /backups/{id} call in seconds",
 })
 var backupDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_delete_success_total",
+	Name: "schelly_webhook_backup_delete_success_total",
 	Help: "Total DELETE /backups/{id} calls success",
 })
 var backupDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "webhook_backup_delete_error_total",
+	Name: "schelly_webhook_backup_delete_error_total",
 	Help: "Total DELETE /backups/{id} calls error",
 })
 

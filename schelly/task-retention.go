@@ -11,22 +11,22 @@ import (
 
 //METRICS
 var retentionTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "retention_tasks_total",
+	Name: "schelly_retention_tasks_total",
 	Help: "Total retention tasks triggered",
 })
 
 var retentionBackupsDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "retention_backup_delete_success_total",
+	Name: "schelly_retention_backup_delete_success_total",
 	Help: "Total retention backups deleted with success",
 })
 
 var retentionBackupsDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "retention_backup_delete_error_total",
+	Name: "schelly_retention_backup_delete_error_total",
 	Help: "Total retention backups deleted with error",
 })
 
 var retentionBackupsRetriesCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "retention_backup_delete_retries_total",
+	Name: "schelly_retention_backup_delete_retries_total",
 	Help: "Total retention backup delete retries",
 })
 

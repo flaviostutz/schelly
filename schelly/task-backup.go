@@ -10,81 +10,81 @@ import (
 
 //METRICS
 var backupLastSizeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "backup_last_size_mbytes",
+	Name: "schelly_backup_last_size_mbytes",
 	Help: "Last successful backup size in bytes",
 })
 
 var backupLastTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "backup_last_time_seconds",
+	Name: "schelly_backup_last_time_seconds",
 	Help: "Last successful backup time",
 })
 
 var backupTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_total",
+	Name: "schelly_backup_tasks_total",
 	Help: "Total backup tasks triggered",
 })
 
 var backupTasksSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_success_total",
+	Name: "schelly_backup_tasks_success_total",
 	Help: "Total backup tasks with success",
 })
 
 var backupTasksSkippedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_skipped_total",
+	Name: "schelly_backup_tasks_skipped_total",
 	Help: "Total backup tasks skipped because another task was running",
 })
 
 var backupTasksRetriedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_retried_total",
+	Name: "schelly_backup_tasks_retried_total",
 	Help: "Total backup tasks delayed with a retry because the previous task was not finished yet",
 })
 
 var backupTasksRetryTimeoutCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_retry_timeout_total",
+	Name: "schelly_backup_tasks_retry_timeout_total",
 	Help: "Total backup tasks skipped because the time of retries has reached grace time",
 })
 
 var backupTasksErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_error_total",
+	Name: "schelly_backup_tasks_error_total",
 	Help: "Total backup tasks with error",
 })
 
 var backupTriggerCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_triggered_total",
+	Name: "schelly_backup_triggered_total",
 	Help: "Total backups (calling the webhook POST /backup) triggered",
 })
 
 var backupSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_available_total",
+	Name: "schelly_backup_available_total",
 	Help: "Total backups whose return status is 'available'",
 })
 
 var backupRunningCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_running_total",
+	Name: "schelly_backup_running_total",
 	Help: "Total backups whose return status is 'running'",
 })
 var backupSkippedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_skipped_total",
+	Name: "schelly_backup_skipped_total",
 	Help: "Total backups that were skipped because another backup was in place",
 })
 
 var backupErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_error_total",
+	Name: "schelly_backup_error_total",
 	Help: "Total backups whose return status is 'error'",
 })
 
 var backupTaggingErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tagging_error_total",
+	Name: "schelly_backup_tagging_error_total",
 	Help: "Total backups that had errors while tagging",
 })
 
 var backupCanceledCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_canceled_total",
+	Name: "schelly_backup_canceled_total",
 	Help: "Total backups whose time running exceeded grace time and were canceled",
 })
 
 var backupsTaggedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backups_tagged_total",
+	Name: "schelly_backups_tagged_total",
 	Help: "Total backups that were tagged",
 })
 

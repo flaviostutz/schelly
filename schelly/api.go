@@ -12,12 +12,12 @@ import (
 )
 
 var apiInvocationsSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "api_invocations_success_total",
+	Name: "schelly_api_invocations_success_total",
 	Help: "Total api requests served with success",
 })
 
 var apiInvocationsErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "api_invocations_error_total",
+	Name: "schelly_api_invocations_error_total",
 	Help: "Total api requests served with error",
 })
 

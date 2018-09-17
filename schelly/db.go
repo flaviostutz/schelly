@@ -14,12 +14,12 @@ import (
 )
 
 var metricsSQLSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "sql_success_total",
+	Name: "schelly_sql_success_total",
 	Help: "Total database statements executed successfuly",
 })
 
 var metricsSQLErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "sql_error_total",
+	Name: "schelly_sql_error_total",
 	Help: "Total database statements executed with error",
 })
 
