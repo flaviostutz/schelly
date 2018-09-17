@@ -47,6 +47,13 @@ var backupTagCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	"status",
 })
 
+var overallBackupWarnCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_warn_total",
+	Help: "Total overall backup warnings",
+}, []string{
+	"status",
+})
+
 var runningBackupTask = false
 
 func initBackup() {
@@ -55,12 +62,14 @@ func initBackup() {
 	prometheus.MustRegister(backupTasksCounter)
 	prometheus.MustRegister(backupMaterializedCounter)
 	prometheus.MustRegister(backupTagCounter)
+	prometheus.MustRegister(overallBackupWarnCounter)
 }
 
 func runBackupTask() {
 	if runningBackupTask {
 		logrus.Debug("runBackupTask already running. skipping new task creation")
 		backupTasksCounter.WithLabelValues("skipped").Inc()
+		overallBackupWarnCounter.WithLabelValues("warning").Inc()
 		return
 	} else {
 		runningBackupTask = true
@@ -77,10 +86,12 @@ func runBackupTask() {
 				logrus.Errorf("Error triggering backup. Retrying until grace time in 5 seconds. err=%s", err)
 				time.Sleep(5 * time.Second)
 				backupTriggerCounter.WithLabelValues("retry").Inc()
+				overallBackupWarnCounter.WithLabelValues("warning").Inc()
 			} else {
 				logrus.Errorf("Error triggering backup. Grace time reached. Won't retry anymore. err=%s", err)
 				runningBackupTask = false
 				backupTriggerCounter.WithLabelValues("error").Inc()
+				overallBackupWarnCounter.WithLabelValues("error").Inc()
 			}
 		} else {
 			logrus.Infof("Backup task done. elapsed=%s", elapsed)
@@ -103,6 +114,7 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	} else {
 		if backupStatus == "running" {
 			logrus.Infof("Another backup task %s is still running (%s). Skipping backup.", backupID, time.Now().Sub(backupDate))
+			overallBackupWarnCounter.WithLabelValues("warning").Inc()
 			return ResponseWebhook{}, nil
 		}
 	}
@@ -112,12 +124,14 @@ func triggerNewBackup() (ResponseWebhook, error) {
 
 	resp, err1 := createWebhookBackup()
 	if err1 != nil {
+		overallBackupWarnCounter.WithLabelValues("error").Inc()
 		return resp, fmt.Errorf("Couldn't invoke webhook for backup creation. err=%s", err1)
 	} else if resp.Status == "running" {
 		logrus.Infof("Backup invoked successfuly. Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
 		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	} else {
 		logrus.Warnf("Backup invoked but an unrecognized status was returned. Won't track it. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
+		overallBackupWarnCounter.WithLabelValues("error").Inc()
 		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	}
 
@@ -249,6 +263,7 @@ func checkBackupTask() {
 	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
 	if err != nil {
 		logrus.Debugf("Couldn't load task status file. Ignoring. err=%s", err)
+		overallBackupWarnCounter.WithLabelValues("warning").Inc()
 	}
 	if backupStatus == "running" {
 		resp, err := getWebhookBackupInfo(backupID)
@@ -264,6 +279,7 @@ func checkBackupTask() {
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 					avoidRetentionLock.Unlock()
+					overallBackupWarnCounter.WithLabelValues("error").Inc()
 				} else {
 					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
@@ -272,7 +288,10 @@ func checkBackupTask() {
 						backupLastSizeGauge.Set(float64(resp.SizeMB))
 					}
 					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
-					tagAllBackups()
+					err = tagAllBackups()
+					if err != nil {
+						overallBackupWarnCounter.WithLabelValues("error").Inc()
+					}
 					avoidRetentionLock.Unlock()
 				}
 			}
@@ -297,6 +316,7 @@ func checkGraceTime() {
 				backupMaterializedCounter.WithLabelValues("cancelled").Inc()
 				setCurrentTaskStatus(backupID, "cancelled", backupDate)
 			}
+			overallBackupWarnCounter.WithLabelValues("error").Inc()
 		}
 	}
 }

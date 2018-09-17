@@ -17,7 +17,7 @@ import (
 var invocationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	Name:    "schelly_webhook_invocation",
 	Help:    "Total duration of webhook calls",
-	Buckets: []float64{0.1, 3, 10},
+	Buckets: []float64{0.1, 1, 10},
 }, []string{
 	// which webhook operation?
 	"operation",
