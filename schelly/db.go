@@ -13,14 +13,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-var metricsSQLSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "schelly_sql_success_total",
-	Help: "Total database statements executed successfuly",
-})
-
-var metricsSQLErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "schelly_sql_error_total",
-	Help: "Total database statements executed with error",
+var metricsSQLCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_sql_total",
+	Help: "Total database statements executed",
+}, []string{
+	"status",
 })
 
 //MaterializedBackup backup record
@@ -44,8 +41,7 @@ type MaterializedBackup struct {
 var db = &sql.DB{}
 
 func initDB() error {
-	prometheus.MustRegister(metricsSQLSuccessCounter)
-	prometheus.MustRegister(metricsSQLErrorCounter)
+	prometheus.MustRegister(metricsSQLCounter)
 
 	db0, err := sql.Open("sqlite3", fmt.Sprintf("%s/sqlite.db", options.dataDir))
 	if err != nil {
@@ -97,10 +93,10 @@ func createMaterializedBackup(backupID string, dataID string, status string, sta
 	}
 	_, err2 := stmt.Exec(backupID, dataID, status, startDate, endDate, customData, size)
 	if err2 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return "", err2
 	}
-	metricsSQLSuccessCounter.Inc()
+	metricsSQLCounter.WithLabelValues("success").Inc()
 	// rows, _ := db.Query("SELECT id,  FROM backup_tasks")
 	return backupID, nil
 }
@@ -108,7 +104,7 @@ func createMaterializedBackup(backupID string, dataID string, status string, sta
 func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 	rows, err1 := db.Query("SELECT id,data_id,status,start_time,end_time,custom_data,size,reference,minutely,hourly,daily,weekly,monthly,yearly FROM materialized_backup WHERE id='" + backupID + "'")
 	if err1 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return MaterializedBackup{}, err1
 	}
 	defer rows.Close()
@@ -117,19 +113,19 @@ func getMaterializedBackup(backupID string) (MaterializedBackup, error) {
 		backup := MaterializedBackup{}
 		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
-			metricsSQLErrorCounter.Inc()
+			metricsSQLCounter.WithLabelValues("error").Inc()
 			return MaterializedBackup{}, err2
 		} else {
-			metricsSQLSuccessCounter.Inc()
+			metricsSQLCounter.WithLabelValues("success").Inc()
 			return backup, nil
 		}
 	}
 	err := rows.Err()
 	if err != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return MaterializedBackup{}, err
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 		return MaterializedBackup{}, fmt.Errorf("Backup id %s not found", backupID)
 	}
 }
@@ -159,7 +155,7 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 	logrus.Debugf("query=%s", q)
 	rows, err1 := db.Query(q)
 	if err1 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return []MaterializedBackup{}, err1
 	}
 	defer rows.Close()
@@ -169,7 +165,7 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 		backup := MaterializedBackup{}
 		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.SizeMB, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
-			metricsSQLErrorCounter.Inc()
+			metricsSQLCounter.WithLabelValues("error").Inc()
 			return []MaterializedBackup{}, err2
 		} else {
 			backups = append(backups, backup)
@@ -177,10 +173,10 @@ func getMaterializedBackups(limit int, tag string, status string, randomOrder bo
 	}
 	err := rows.Err()
 	if err != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return []MaterializedBackup{}, err
 	}
-	metricsSQLSuccessCounter.Inc()
+	metricsSQLCounter.WithLabelValues("success").Inc()
 	return backups, nil
 }
 
@@ -208,7 +204,7 @@ func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int
 	logrus.Debugf("getExclusiveTags query=%s", q)
 	rows, err1 := db.Query(q)
 	if err1 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return []MaterializedBackup{}, err1
 	}
 	defer rows.Close()
@@ -218,7 +214,7 @@ func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int
 		backup := MaterializedBackup{}
 		err2 := rows.Scan(&backup.ID, &backup.DataID, &backup.Status, &backup.StartTime, &backup.EndTime, &backup.CustomData, &backup.Reference, &backup.Minutely, &backup.Hourly, &backup.Daily, &backup.Weekly, &backup.Monthly, &backup.Yearly)
 		if err2 != nil {
-			metricsSQLErrorCounter.Inc()
+			metricsSQLCounter.WithLabelValues("error").Inc()
 			return []MaterializedBackup{}, err2
 		} else {
 			backups = append(backups, backup)
@@ -226,10 +222,10 @@ func getExclusiveTagAvailableMaterializedBackups(tag string, skipNewestCount int
 	}
 	err := rows.Err()
 	if err != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return []MaterializedBackup{}, err
 	}
-	metricsSQLSuccessCounter.Inc()
+	metricsSQLCounter.WithLabelValues("success").Inc()
 	return backups, nil
 }
 
@@ -240,9 +236,9 @@ func clearTagsAndReferenceMaterializedBackup(tx *sql.Tx) (sql.Result, error) {
 	}
 	res, err0 := tx.Stmt(stmt).Exec()
 	if err0 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 	}
 	return res, err0
 }
@@ -254,9 +250,9 @@ func setAllTagsMaterializedBackup(tx *sql.Tx, backupID string) (sql.Result, erro
 	}
 	res, err0 := tx.Stmt(stmt).Exec(backupID)
 	if err0 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 	}
 	return res, err0
 }
@@ -276,9 +272,9 @@ func markReferencesMinutelyMaterializedBackup(tx *sql.Tx, secondReference string
 	}
 	res, err0 := tx.Stmt(stmt).Exec()
 	if err0 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 	}
 	return res, err0
 }
@@ -288,10 +284,10 @@ func setStatusMaterializedBackup(backupID string, status string) (sql.Result, er
 	stmt, err := db.Prepare(sql)
 	logrus.Infof("%s %s %s", sql, backupID, status)
 	if err != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return nil, err
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 	}
 	return stmt.Exec(status, backupID)
 }
@@ -308,14 +304,14 @@ func markTagMaterializedBackup(tx *sql.Tx, tag string, previousTag string, group
 	logrus.Debugf("sql=%s", sql)
 	stmt, err := db.Prepare(sql)
 	if err != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 		return nil, err
 	}
 	res, err0 := tx.Stmt(stmt).Exec()
 	if err0 != nil {
-		metricsSQLErrorCounter.Inc()
+		metricsSQLCounter.WithLabelValues("error").Inc()
 	} else {
-		metricsSQLSuccessCounter.Inc()
+		metricsSQLCounter.WithLabelValues("success").Inc()
 	}
 	return res, err0
 }

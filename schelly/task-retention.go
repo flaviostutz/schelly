@@ -15,14 +15,11 @@ var retentionTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
 	Help: "Total retention tasks triggered",
 })
 
-var retentionBackupsDeleteSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "schelly_retention_backup_delete_success_total",
-	Help: "Total retention backups deleted with success",
-})
-
-var retentionBackupsDeleteErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "schelly_retention_backup_delete_error_total",
-	Help: "Total retention backups deleted with error",
+var retentionBackupsDeleteCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_retention_backup_delete_total",
+	Help: "Total retention backups deleted",
+}, []string{
+	"status",
 })
 
 var retentionBackupsRetriesCounter = prometheus.NewCounter(prometheus.CounterOpts{
@@ -37,8 +34,7 @@ var avoidRetentionLock = &sync.Mutex{}
 
 func initRetention() {
 	prometheus.MustRegister(retentionTasksCounter)
-	prometheus.MustRegister(retentionBackupsDeleteSuccessCounter)
-	prometheus.MustRegister(retentionBackupsDeleteErrorCounter)
+	prometheus.MustRegister(retentionBackupsDeleteCounter)
 	prometheus.MustRegister(retentionBackupsRetriesCounter)
 }
 
@@ -81,10 +77,10 @@ func triggerRetentionTask() {
 		ra, _ := res.RowsAffected()
 		if err != nil {
 			logrus.Errorf("Couldn't set status of backup '%s' to 'deleting'. Skipping backup deletion. err=%s", backup.ID, err)
-			retentionBackupsDeleteErrorCounter.Inc()
+			retentionBackupsDeleteCounter.WithLabelValues("error").Inc()
 		} else if ra != 1 {
 			logrus.Errorf("Strange number of affected rows while setting status of backup '%s' to 'deleting'. Skipping backup deletion. rowsAffected=%d", backup.ID, ra)
-			retentionBackupsDeleteErrorCounter.Inc()
+			retentionBackupsDeleteCounter.WithLabelValues("error").Inc()
 		} else {
 			performBackupDelete(backup.ID)
 			//give some breath to backed webhook
@@ -105,15 +101,15 @@ func performBackupDelete(backupID string) {
 		if err0 != nil {
 			logrus.Warnf("Could not set backup %s status to 'delete-error'. err=%s", backupID, err0)
 		}
-		retentionBackupsDeleteErrorCounter.Inc()
+		retentionBackupsDeleteCounter.WithLabelValues("error").Inc()
 	} else {
 		logrus.Infof("Backup '%s' deleted successfuly", backupID)
 		_, err0 := setStatusMaterializedBackup(backupID, "deleted")
 		if err0 != nil {
 			logrus.Warnf("Could not set backup %s status to 'deleted'. err=%s", backupID, err0)
-			retentionBackupsDeleteErrorCounter.Inc()
+			retentionBackupsDeleteCounter.WithLabelValues("error").Inc()
 		} else {
-			retentionBackupsDeleteSuccessCounter.Inc()
+			retentionBackupsDeleteCounter.WithLabelValues("success").Inc()
 		}
 	}
 }
