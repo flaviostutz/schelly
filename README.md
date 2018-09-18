@@ -204,7 +204,11 @@ The webhook server must expose the following REST endpoints:
 
 # Monitoring
 
-Schelly has a /metrics endpoint compatible with Prometheus
+Schelly has a /metrics endpoint compatible with Prometheus. See https://github.com/flaviostutz/schelly-grafana
+
+# Build
+
+git clone this repo and ```docker-compose build```
 
 # Contribute
 
