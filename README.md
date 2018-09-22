@@ -6,7 +6,8 @@ Schelly is a backup tool focused on the scheduling part of a common backup routi
 </p>
 
 The triggering and retainment of backups are based on the functional perception of backups, so you configure:
-   - Triggering cron string: cron string that defines when a new backup will be created (by calling a backend backup webhook, as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
+   - Triggering cron string: cron string that defines when a new backup will be created (some help on cron strings: https://crontab.guru/examples.html)
+   - A backup repository that will actually do the backup routine and store the backup files (as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
    - Retention policies: for how long do a backup must be retained? It depends on what the user needs when something goes wrong. In general, the more recent, more backups in time you need. By default, Schelly will try to keep something like (if a backup is outside this, the webhook for backup removal will be called):
        - the last 4 daily backups
        - the last 4 weekly backups
