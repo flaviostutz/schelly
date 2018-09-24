@@ -1,5 +1,5 @@
 # schelly
-Schelly is a backup tool focused on the scheduling part of a common backup routine, leaving the dirty job for specialized storage/database tools as it should. You can use any backup backend by just implementing a simple REST API specified here. This schelly compatible backup backend is called a **Backup Repository**.
+Schelly is a backup tool focused on the scheduling part of a common backup routine, leaving the dirty job for specialized storage/database tools as it should. You can use any backup backend by just implementing a simple REST API specified here. This schelly compatible backup backend is called a **Backup Provider**.
 
 <p align="center">
   <img width="700" src="diagram1.png?raw=true">
@@ -7,7 +7,7 @@ Schelly is a backup tool focused on the scheduling part of a common backup routi
 
 The triggering and retainment of backups are based on the functional perception of backups, so you configure:
    - Triggering cron string: cron string that defines when a new backup will be created (some help on cron strings: https://crontab.guru/examples.html)
-   - A backup repository that will actually do the backup routine and store the backup files (as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
+   - A backup provider that will actually do the backup routine and store the backup files (as [schelly-restic](http://github.com/flaviostutz/schelly-restic), for example)
    - Retention policies: for how long do a backup must be retained? It depends on what the user needs when something goes wrong. In general, the more recent, more backups in time you need. By default, Schelly will try to keep something like (if a backup is outside this, the webhook for backup removal will be called):
        - the last 4 daily backups
        - the last 4 weekly backups
@@ -121,7 +121,7 @@ format "header1=contents1,header2=contents2"
       - status code must be 202 if backup request accepted
 
 
-# Backup Repository REST API Spec
+# Backup Provider REST API Spec
 
 will be invoked when Schelly needs to create/delete a backup on a backend server
 
@@ -222,5 +222,5 @@ Please submit your issues and pull requests here!
 * https://github.com/flaviostutz/schelly-webhook
 * https://github.com/flaviostutz/schelly-grafana
 * https://github.com/flaviostutz/schelly-backy2
-  * Clone this if you want to create your own Backup Repo
+  * Clone this if you want to create your own Backup Provider
 * https://github.com/flaviostutz/schelly-restic
