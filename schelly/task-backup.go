@@ -10,82 +10,48 @@ import (
 
 //METRICS
 var backupLastSizeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "backup_last_size_mbytes",
+	Name: "schelly_backup_last_size_mbytes",
 	Help: "Last successful backup size in bytes",
 })
 
 var backupLastTimeGauge = prometheus.NewGauge(prometheus.GaugeOpts{
-	Name: "backup_last_time_seconds",
+	Name: "schelly_backup_last_time_seconds",
 	Help: "Last successful backup time",
 })
 
-var backupTasksCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_total",
+var backupTasksCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_tasks_total",
 	Help: "Total backup tasks triggered",
+}, []string{
+	"status",
 })
 
-var backupTasksSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_success_total",
-	Help: "Total backup tasks with success",
+var backupTriggerCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_trigger_total",
+	Help: "Total backups triggered",
+}, []string{
+	"status",
 })
 
-var backupTasksSkippedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_skipped_total",
-	Help: "Total backup tasks skipped because another task was running",
+var backupMaterializedCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_materialized_total",
+	Help: "Total backups materialized",
+}, []string{
+	"status",
 })
 
-var backupTasksRetriedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_retried_total",
-	Help: "Total backup tasks delayed with a retry because the previous task was not finished yet",
-})
-
-var backupTasksRetryTimeoutCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_retry_timeout_total",
-	Help: "Total backup tasks skipped because the time of retries has reached grace time",
-})
-
-var backupTasksErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tasks_error_total",
-	Help: "Total backup tasks with error",
-})
-
-var backupTriggerCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_triggered_total",
-	Help: "Total backups (calling the webhook POST /backup) triggered",
-})
-
-var backupSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_available_total",
-	Help: "Total backups whose return status is 'available'",
-})
-
-var backupRunningCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_running_total",
-	Help: "Total backups whose return status is 'running'",
-})
-var backupSkippedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_skipped_total",
-	Help: "Total backups that were skipped because another backup was in place",
-})
-
-var backupErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_error_total",
-	Help: "Total backups whose return status is 'error'",
-})
-
-var backupTaggingErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_tagging_error_total",
-	Help: "Total backups that had errors while tagging",
-})
-
-var backupCanceledCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backup_canceled_total",
-	Help: "Total backups whose time running exceeded grace time and were canceled",
-})
-
-var backupsTaggedCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "backups_tagged_total",
+var backupTagCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_tag_total",
 	Help: "Total backups that were tagged",
+}, []string{
+	"status",
+})
+
+var overallBackupWarnCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_backup_warn_total",
+	Help: "Total overall backup warnings",
+}, []string{
+	"status",
 })
 
 var runningBackupTask = false
@@ -94,29 +60,20 @@ func initBackup() {
 	prometheus.MustRegister(backupLastSizeGauge)
 	prometheus.MustRegister(backupLastTimeGauge)
 	prometheus.MustRegister(backupTasksCounter)
-	prometheus.MustRegister(backupTasksSuccessCounter)
-	prometheus.MustRegister(backupTasksSkippedCounter)
-	prometheus.MustRegister(backupTasksRetriedCounter)
-	prometheus.MustRegister(backupTasksRetryTimeoutCounter)
-	prometheus.MustRegister(backupTasksErrorCounter)
-	prometheus.MustRegister(backupTriggerCounter)
-	prometheus.MustRegister(backupSuccessCounter)
-	prometheus.MustRegister(backupRunningCounter)
-	prometheus.MustRegister(backupSkippedCounter)
-	prometheus.MustRegister(backupErrorCounter)
-	prometheus.MustRegister(backupTaggingErrorCounter)
-	prometheus.MustRegister(backupCanceledCounter)
-	prometheus.MustRegister(backupsTaggedCounter)
+	prometheus.MustRegister(backupMaterializedCounter)
+	prometheus.MustRegister(backupTagCounter)
+	prometheus.MustRegister(overallBackupWarnCounter)
 }
 
 func runBackupTask() {
-	backupTasksCounter.Inc()
 	if runningBackupTask {
 		logrus.Debug("runBackupTask already running. skipping new task creation")
-		backupTasksSkippedCounter.Inc()
+		backupTasksCounter.WithLabelValues("skipped").Inc()
+		overallBackupWarnCounter.WithLabelValues("warning").Inc()
 		return
 	} else {
 		runningBackupTask = true
+		backupTasksCounter.WithLabelValues("run").Inc()
 	}
 
 	start := time.Now()
@@ -125,20 +82,21 @@ func runBackupTask() {
 		_, err := triggerNewBackup()
 		elapsed := time.Now().Sub(start)
 		if err != nil {
-			backupTasksErrorCounter.Inc()
 			if elapsed.Seconds() < options.graceTimeSeconds {
 				logrus.Errorf("Error triggering backup. Retrying until grace time in 5 seconds. err=%s", err)
-				backupTasksRetriedCounter.Inc()
 				time.Sleep(5 * time.Second)
+				backupTriggerCounter.WithLabelValues("retry").Inc()
+				overallBackupWarnCounter.WithLabelValues("warning").Inc()
 			} else {
 				logrus.Errorf("Error triggering backup. Grace time reached. Won't retry anymore. err=%s", err)
-				backupTasksRetryTimeoutCounter.Inc()
 				runningBackupTask = false
+				backupTriggerCounter.WithLabelValues("error").Inc()
+				overallBackupWarnCounter.WithLabelValues("error").Inc()
 			}
 		} else {
 			logrus.Infof("Backup task done. elapsed=%s", elapsed)
-			backupTasksSuccessCounter.Inc()
 			runningBackupTask = false
+			backupTriggerCounter.WithLabelValues("success").Inc()
 		}
 	}
 }
@@ -147,7 +105,6 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	start := time.Now()
 	logrus.Info("")
 	logrus.Info(">>>> BACKUP TASK")
-	backupTriggerCounter.Inc()
 
 	logrus.Debug("Checking if there is another backup running")
 
@@ -157,7 +114,7 @@ func triggerNewBackup() (ResponseWebhook, error) {
 	} else {
 		if backupStatus == "running" {
 			logrus.Infof("Another backup task %s is still running (%s). Skipping backup.", backupID, time.Now().Sub(backupDate))
-			backupSkippedCounter.Inc()
+			overallBackupWarnCounter.WithLabelValues("warning").Inc()
 			return ResponseWebhook{}, nil
 		}
 	}
@@ -167,15 +124,14 @@ func triggerNewBackup() (ResponseWebhook, error) {
 
 	resp, err1 := createWebhookBackup()
 	if err1 != nil {
-		backupErrorCounter.Inc()
+		overallBackupWarnCounter.WithLabelValues("error").Inc()
 		return resp, fmt.Errorf("Couldn't invoke webhook for backup creation. err=%s", err1)
 	} else if resp.Status == "running" {
 		logrus.Infof("Backup invoked successfuly. Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-		backupRunningCounter.Inc()
 		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	} else {
 		logrus.Warnf("Backup invoked but an unrecognized status was returned. Won't track it. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-		backupErrorCounter.Inc()
+		overallBackupWarnCounter.WithLabelValues("error").Inc()
 		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
 	}
 
@@ -238,24 +194,22 @@ func tagAllBackups() error {
 	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", options.dailyParams[1])
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error marking daily tags. err=%s", err)
 	}
 	tc, _ := res.RowsAffected()
 	logrus.Debugf("%d rows affected", tc)
-	backupsTaggedCounter.Add(float64(tc))
 
 	//weekly
 	logrus.Debugf("Marking weekly tags")
 	res, err = markTagMaterializedBackup(tx, "weekly", "daily", "%Y-%m-%W-0T0:0:0.000", "%w", options.weeklyParams[1])
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error marking weekly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
 	logrus.Debugf("%d rows affected", tc)
-	backupsTaggedCounter.Add(float64(tc))
 
 	//monthly
 	logrus.Debugf("Marking monthly tags")
@@ -266,43 +220,41 @@ func tagAllBackups() error {
 	res, err = markTagMaterializedBackup(tx, "monthly", "daily", "%Y-%m-0T0:0:0.000", "%d", ref)
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error marking monthly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
 	logrus.Debugf("%d rows affected", tc)
-	backupsTaggedCounter.Add(float64(tc))
 
 	//yearly
 	logrus.Debugf("Marking yearly tags")
 	res, err = markTagMaterializedBackup(tx, "yearly", "monthly", "%Y-0-0T0:0:0.000", "%m", options.yearlyParams[1])
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error marking yearly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
 	logrus.Debugf("%d rows affected", tc)
-	backupsTaggedCounter.Add(float64(tc))
 
 	logrus.Debug("Tagging last backup with all tags")
 	res, err = setAllTagsMaterializedBackup(tx, lastBackup.ID)
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error tagging last backup. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
 	logrus.Debugf("%d rows affected", tc)
-	backupsTaggedCounter.Add(float64(tc))
 
 	logrus.Debug("Commiting transaction")
 	err = tx.Commit()
 	if err != nil {
 		tx.Rollback()
-		backupTaggingErrorCounter.Inc()
+		backupTagCounter.WithLabelValues("error").Inc()
 		return fmt.Errorf("Error commiting transation. err=%s", err)
 	}
+	backupTagCounter.WithLabelValues("success").Inc()
 	return nil
 }
 
@@ -311,6 +263,7 @@ func checkBackupTask() {
 	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
 	if err != nil {
 		logrus.Debugf("Couldn't load task status file. Ignoring. err=%s", err)
+		overallBackupWarnCounter.WithLabelValues("warning").Inc()
 	}
 	if backupStatus == "running" {
 		resp, err := getWebhookBackupInfo(backupID)
@@ -326,15 +279,19 @@ func checkBackupTask() {
 				if err1 != nil {
 					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
 					avoidRetentionLock.Unlock()
+					overallBackupWarnCounter.WithLabelValues("error").Inc()
 				} else {
 					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
 					setCurrentTaskStatus(backupID, resp.Status, backupDate)
-					backupSuccessCounter.Inc()
+					backupMaterializedCounter.WithLabelValues("success").Inc()
 					if resp.SizeMB != 0 {
 						backupLastSizeGauge.Set(float64(resp.SizeMB))
 					}
 					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
-					tagAllBackups()
+					err = tagAllBackups()
+					if err != nil {
+						overallBackupWarnCounter.WithLabelValues("error").Inc()
+					}
 					avoidRetentionLock.Unlock()
 				}
 			}
@@ -352,13 +309,14 @@ func checkGraceTime() {
 			err = deleteWebhookBackup(backupID)
 			if err != nil {
 				logrus.Errorf("Couldn't cancel running backup %s task on webhook. err=%s", backupID, err)
-				backupErrorCounter.Inc()
+				backupMaterializedCounter.WithLabelValues("error").Inc()
 				setCurrentTaskStatus(backupID, "error", backupDate)
 			} else {
 				logrus.Infof("Running backup task %s cancelled on webhook successfuly", backupID)
-				backupCanceledCounter.Inc()
-				setCurrentTaskStatus(backupID, "canceled", backupDate)
+				backupMaterializedCounter.WithLabelValues("cancelled").Inc()
+				setCurrentTaskStatus(backupID, "cancelled", backupDate)
 			}
+			overallBackupWarnCounter.WithLabelValues("error").Inc()
 		}
 	}
 }

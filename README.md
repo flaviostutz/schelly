@@ -49,6 +49,10 @@ services:
     environment:
       - RESTIC_PASSWORD=123
       - LOG_LEVEL=debug
+      - PRE_BACKUP_COMMAND=dd if=/dev/zero of=/backup-source/TESTFILE bs=100MB count=2
+      - POST_BACKUP_COMMAND=rm /backup-source/TESTFILE
+      - SOURCE_DATA_PATH=/backup-source/TESTFILE
+      - TARGET_DATA_PATH=/backup-repo
 ```
 
 * execute ```docker-compose up``` and see logs
@@ -141,7 +145,7 @@ The webhook server must expose the following REST endpoints:
         }
       ```
       - status must be always 'running' (check for backup completion later using GET /backups/{id})
-      - status code must be 202 if backup request accepted
+      - status code must be 202 if backup request accepted. The backup must be performed assynchronously and Schelly will monitor completion by polling GET {webhook-url}/{backup-id}, waiting for "status" == "available"
 
   - ```GET {webhook-url}/{backup-id}```
     - Invoked when Schelly wants to query a specific backup instance
@@ -201,7 +205,11 @@ The webhook server must expose the following REST endpoints:
 
 # Monitoring
 
-Schelly has a /metrics endpoint compatible with Prometheus
+Schelly has a /metrics endpoint compatible with Prometheus. See https://github.com/flaviostutz/schelly-grafana
+
+# Build
+
+git clone this repo and ```docker-compose build```
 
 # Contribute
 

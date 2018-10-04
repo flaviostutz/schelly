@@ -11,19 +11,15 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-var apiInvocationsSuccessCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "api_invocations_success_total",
-	Help: "Total api requests served with success",
-})
-
-var apiInvocationsErrorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-	Name: "api_invocations_error_total",
-	Help: "Total api requests served with error",
+var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_api_invocations_total",
+	Help: "Total api requests served",
+}, []string{
+	"status",
 })
 
 func startRestAPI() {
-	prometheus.MustRegister(apiInvocationsSuccessCounter)
-	prometheus.MustRegister(apiInvocationsErrorCounter)
+	prometheus.MustRegister(apiInvocationsCounter)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/backups", GetBackups).Methods("GET")
@@ -46,7 +42,7 @@ func GetBackups(w http.ResponseWriter, r *http.Request) {
 	backups, err := getMaterializedBackups(0, tag, status, false)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		apiInvocationsErrorCounter.Inc()
+		apiInvocationsCounter.WithLabelValues("error").Inc()
 		return
 	}
 
@@ -71,7 +67,7 @@ func GetBackups(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte("[" + rjson + "]"))
 	logrus.Debugf("result: %s", "["+rjson+"]")
-	apiInvocationsSuccessCounter.Inc()
+	apiInvocationsCounter.WithLabelValues("success").Inc()
 }
 
 //TriggerBackup get currently tracked backups
@@ -80,7 +76,7 @@ func TriggerBackup(w http.ResponseWriter, r *http.Request) {
 	result, err := triggerNewBackup()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
-		apiInvocationsErrorCounter.Inc()
+		apiInvocationsCounter.WithLabelValues("error").Inc()
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -90,5 +86,5 @@ func TriggerBackup(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Write([]byte(rs))
 	logrus.Debugf("result: %s", rs)
-	apiInvocationsSuccessCounter.Inc()
+	apiInvocationsCounter.WithLabelValues("success").Inc()
 }

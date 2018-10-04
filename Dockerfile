@@ -38,5 +38,5 @@ ADD startup.sh /
 CMD [ "/startup.sh" ]
 
 
-FROM BUILD AS TEST
-RUN go test -v schelly
+# FROM BUILD AS TEST
+# RUN go test -v schelly

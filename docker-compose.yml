@@ -11,7 +11,7 @@ services:
     environment:
       - LOG_LEVEL=debug
       - BACKUP_NAME=test
-      - WEBHOOK_URL=http://172.20.10.2:7070/backups
+      - WEBHOOK_URL=http://schelly-restic:7070/backups
       - BACKUP_CRON_STRING=0/3 * * * * *
       - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
@@ -31,8 +31,10 @@ services:
     environment:
       - RESTIC_PASSWORD=123
       - LOG_LEVEL=debug
-      - PRE_BACKUP_COMMAND=/pre-test.sh
-      - POST_BACKUP_COMMAND=/post-test.sh
+      - PRE_BACKUP_COMMAND=dd if=/dev/zero of=/backup-source/TESTFILE bs=100MB count=2
+      - POST_BACKUP_COMMAND=rm /backup-source/TESTFILE
+      - SOURCE_DATA_PATH=/backup-source/TESTFILE
+      - TARGET_DATA_PATH=/backup-repo
 
 networks:
   default:
