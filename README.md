@@ -65,7 +65,7 @@ services:
 * WEBHOOK_HEADERS - custom k=v comma-separated list of HTTP headers to be sent on webhook calls to backup backends
 * WEBHOOK_CREATE_BODY - custom body to be sent to backup backend during new backup calls
 * WEBHOOK_DELETE_BODY - custom body to be sent to backup backend during delete backup calls
-* WEBHOOK_GRACE_TIME - Minimum time running backup task before trying to cancel it (by calling a /DELETE on the webhook)
+* WEBHOOK_GRACE_TIME - Minimum time (in seconds) running backup task before trying to cancel it (by calling a /DELETE on the webhook)
 * RETENTION_SECONDLY - retention config for seconds
 * RETENTION_MINUTELY - retention config for minutes
 * RETENTION_HOURLY - retention config for hours
