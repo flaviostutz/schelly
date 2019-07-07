@@ -1,4 +1,4 @@
-package main
+package schelly
 
 import (
 	"database/sql"
@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 var metricsSQLCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -40,10 +40,10 @@ type MaterializedBackup struct {
 
 var db = &sql.DB{}
 
-func initDB() error {
+func InitDB() error {
 	prometheus.MustRegister(metricsSQLCounter)
 
-	db0, err := sql.Open("sqlite3", fmt.Sprintf("%s/sqlite.db", options.dataDir))
+	db0, err := sql.Open("sqlite3", fmt.Sprintf("%s/sqlite.db", options.DataDir))
 	if err != nil {
 		return err
 	}
@@ -56,7 +56,7 @@ func initDB() error {
 		return err1
 	}
 
-	os.MkdirAll(options.dataDir, os.ModePerm)
+	os.MkdirAll(options.DataDir, os.ModePerm)
 
 	db = db0
 	logrus.Debug("Database initialized")
@@ -65,12 +65,12 @@ func initDB() error {
 
 func setCurrentTaskStatus(id string, status string, date time.Time) error {
 	ft := date.Format(time.RFC3339)
-	return ioutil.WriteFile(fmt.Sprintf("%s/backup-task", options.dataDir), []byte(fmt.Sprintf("%s|%s|%s", id, status, ft)), 0644)
+	return ioutil.WriteFile(fmt.Sprintf("%s/backup-task", options.DataDir), []byte(fmt.Sprintf("%s|%s|%s", id, status, ft)), 0644)
 }
 
 //returns backupId, backupStatus, time, error
 func getCurrentTaskStatus() (string, string, time.Time, error) {
-	b, err := ioutil.ReadFile(fmt.Sprintf("%s/backup-task", options.dataDir))
+	b, err := ioutil.ReadFile(fmt.Sprintf("%s/backup-task", options.DataDir))
 	line := string(b)
 	if err != nil {
 		return "", "", time.Now(), err

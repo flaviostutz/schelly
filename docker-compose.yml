@@ -3,9 +3,8 @@ version: '3.5'
 services:
 
   schelly:
-    build:
-      context: .
-      target: IMAGE
+    build: .
+    image: flaviostutz/schelly
     ports:
       - 8080:8080
     environment:
@@ -36,10 +35,10 @@ services:
       - SOURCE_DATA_PATH=/backup-source/TESTFILE
       - TARGET_DATA_PATH=/backup-repo
 
-networks:
-  default:
-    ipam:
-      driver: default
-      config:
-        - subnet: 192.168.5.0/24
+# networks:
+#   default:
+#     ipam:
+#       driver: default
+#       config:
+#         - subnet: 192.168.5.0/24
 

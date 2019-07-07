@@ -1,4 +1,4 @@
-package main
+package schelly
 
 import (
 	"bytes"
@@ -9,9 +9,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
+
+//ResponseWebhook default response type for webhook invocations
+type ResponseWebhook struct {
+	ID      string  `json:"id",omitempty`
+	DataID  string  `json:"data_id",omitempty`
+	Status  string  `json:"status",omitempty`
+	Message string  `json:"message",omitempty`
+	SizeMB  float64 `json:"size_mb",omitempty`
+}
 
 //METRICS
 var invocationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
@@ -28,7 +37,7 @@ var invocationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 //avoid doing webhook operations in parallel
 var webhookLock = &sync.Mutex{}
 
-func initWebhook() {
+func InitWebhook() {
 	prometheus.MustRegister(invocationHist)
 }
 
@@ -37,9 +46,9 @@ func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
 	webhookLock.Lock()
 	defer webhookLock.Unlock()
 	logrus.Debugf("getWebhookBackupInfo %s - acquired lock", backupID)
-	logrus.Debug(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
+	logrus.Debug(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
 	start := time.Now()
-	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
+	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook GET backup status invocation failed. err=%s", err)
 		invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
@@ -69,7 +78,7 @@ func createWebhookBackup() (ResponseWebhook, error) {
 	defer webhookLock.Unlock()
 	logrus.Debugf("createWebhookBackup - acquired lock")
 	start := time.Now()
-	resp, data, err := postHTTP(options.webhookURL, options.webhookCreateBody)
+	resp, data, err := postHTTP(options.WebhookURL, options.WebhookCreateBody)
 	if err != nil {
 		logrus.Errorf("Webhook POST new backup invocation failed. err=%s", err)
 		invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
@@ -99,7 +108,7 @@ func deleteWebhookBackup(backupID string) error {
 	defer webhookLock.Unlock()
 	logrus.Debugf("deleteWebhookBackup %s - acquired lock", backupID)
 	start := time.Now()
-	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.webhookURL, backupID))
+	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
 	if err != nil {
 		logrus.Errorf("Webhook DELETE backup invocation failed. err=%s", err)
 		invocationHist.WithLabelValues("delete", "error").Observe(float64(time.Since(start).Seconds()))
@@ -127,7 +136,7 @@ func postHTTP(url string, data string) (http.Response, []byte, error) {
 		return http.Response{}, []byte{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	for k, v := range options.webhookHeaders {
+	for k, v := range options.WebhookHeaders {
 		req.Header.Add(k, v)
 	}
 
@@ -153,7 +162,7 @@ func getHTTP(url string) (http.Response, []byte, error) {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
 		return http.Response{}, []byte{}, err
 	}
-	for k, v := range options.webhookHeaders {
+	for k, v := range options.WebhookHeaders {
 		req.Header.Add(k, v)
 	}
 
@@ -179,7 +188,7 @@ func deleteHTTP(url string) (http.Response, []byte, error) {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
 		return http.Response{}, []byte{}, err
 	}
-	for k, v := range options.webhookHeaders {
+	for k, v := range options.WebhookHeaders {
 		req.Header.Add(k, v)
 	}
 

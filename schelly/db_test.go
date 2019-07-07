@@ -1,4 +1,4 @@
-package main
+package schelly
 
 import (
 	"math/rand"
@@ -10,7 +10,7 @@ import (
 )
 
 func TestStoreTask1(t *testing.T) {
-	initDB()
+	InitDB()
 	err := setCurrentTaskStatus("abc", "pending", time.Now())
 	assert.Nil(t, err, "err")
 	backupID, backupStatus, backupTime, err1 := getCurrentTaskStatus()
@@ -21,7 +21,7 @@ func TestStoreTask1(t *testing.T) {
 }
 
 func TestStoreTask2(t *testing.T) {
-	initDB()
+	InitDB()
 	err := setCurrentTaskStatus("xyz", "success", time.Now())
 	assert.Nil(t, err, "err")
 	backupID, backupStatus, backupTime, err1 := getCurrentTaskStatus()
@@ -32,7 +32,7 @@ func TestStoreTask2(t *testing.T) {
 }
 
 func TestGetMaterializedBackups(t *testing.T) {
-	initDB()
+	InitDB()
 	bid := strconv.Itoa(rand.Int())
 	_, err0 := createMaterializedBackup(bid, bid, "abc", time.Now(), time.Now(), "any", 0)
 	assert.Nil(t, err0, "err")
@@ -48,7 +48,7 @@ func TestGetMaterializedBackups(t *testing.T) {
 }
 
 func TestGetFilteredMaterializedBackups(t *testing.T) {
-	initDB()
+	InitDB()
 	bid := strconv.Itoa(rand.Int())
 	_, err0 := createMaterializedBackup(bid, bid+"1", "123", time.Now(), time.Now(), "any", 0)
 	assert.Nil(t, err0, "err")

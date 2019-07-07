@@ -1,12 +1,12 @@
-package main
+package schelly
 
 import (
 	"strconv"
 	"sync"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 //METRICS
@@ -32,13 +32,13 @@ var runningTask = false
 //avoid doing webhook operations in parallel
 var avoidRetentionLock = &sync.Mutex{}
 
-func initRetention() {
+func InitRetention() {
 	prometheus.MustRegister(retentionTasksCounter)
 	prometheus.MustRegister(retentionBackupsDeleteCounter)
 	prometheus.MustRegister(retentionBackupsRetriesCounter)
 }
 
-func runRetentionTask() {
+func RunRetentionTask() {
 	if runningTask {
 		logrus.Debug("runRetentionTask already running. skipping new task creation")
 		return
@@ -59,16 +59,16 @@ func triggerRetentionTask() {
 
 	tagAllBackups()
 
-	logrus.Debugf("Retention policy: minutely=%s, hourly=%s, daily=%s, weekly=%s, monthly=%s, yearly=%s", options.minutelyParams[0], options.hourlyParams[0], options.dailyParams[0], options.weeklyParams[0], options.monthlyParams[0], options.yearlyParams[0])
+	logrus.Debugf("Retention policy: minutely=%s, hourly=%s, daily=%s, weekly=%s, monthly=%s, yearly=%s", options.MinutelyParams[0], options.HourlyParams[0], options.DailyParams[0], options.WeeklyParams[0], options.MonthlyParams[0], options.YearlyParams[0])
 
 	electedBackups := make([]MaterializedBackup, 0)
 	electedBackups = appendElectedForTag("", "0", electedBackups)
-	electedBackups = appendElectedForTag("minutely", options.minutelyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("hourly", options.hourlyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("daily", options.dailyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("weekly", options.weeklyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("monthly", options.monthlyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("yearly", options.yearlyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("minutely", options.MinutelyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("hourly", options.HourlyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("daily", options.DailyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("weekly", options.WeeklyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("monthly", options.MonthlyParams[0], electedBackups)
+	electedBackups = appendElectedForTag("yearly", options.YearlyParams[0], electedBackups)
 	logrus.Infof("%d backups elected for deletion", len(electedBackups))
 
 	for _, backup := range electedBackups {
@@ -114,7 +114,7 @@ func performBackupDelete(backupID string) {
 	}
 }
 
-func retryDeleteErrors() {
+func RetryDeleteErrors() {
 	logrus.Debugf("Retrying webhook delete for backups with 'delete-error' tag")
 	backups, err := getMaterializedBackups(10, "", "delete-error", true)
 	if err != nil {

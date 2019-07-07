@@ -1,11 +1,11 @@
-package main
+package schelly
 
 import (
 	"fmt"
 	"time"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/sirupsen/logrus"
 )
 
 //METRICS
@@ -56,7 +56,7 @@ var overallBackupWarnCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 
 var runningBackupTask = false
 
-func initBackup() {
+func InitBackup() {
 	prometheus.MustRegister(backupLastSizeGauge)
 	prometheus.MustRegister(backupLastTimeGauge)
 	prometheus.MustRegister(backupTasksCounter)
@@ -65,7 +65,7 @@ func initBackup() {
 	prometheus.MustRegister(overallBackupWarnCounter)
 }
 
-func runBackupTask() {
+func RunBackupTask() {
 	if runningBackupTask {
 		logrus.Debug("runBackupTask already running. skipping new task creation")
 		backupTasksCounter.WithLabelValues("skipped").Inc()
@@ -82,7 +82,7 @@ func runBackupTask() {
 		_, err := triggerNewBackup()
 		elapsed := time.Now().Sub(start)
 		if err != nil {
-			if elapsed.Seconds() < options.graceTimeSeconds {
+			if elapsed.Seconds() < options.GraceTimeSeconds {
 				logrus.Errorf("Error triggering backup. Retrying until grace time in 5 seconds. err=%s", err)
 				time.Sleep(5 * time.Second)
 				backupTriggerCounter.WithLabelValues("retry").Inc()
@@ -119,7 +119,7 @@ func triggerNewBackup() (ResponseWebhook, error) {
 		}
 	}
 
-	logrus.Debugf("Invoking POST '%s' so that a new backup will be created", options.webhookURL)
+	logrus.Debugf("Invoking POST '%s' so that a new backup will be created", options.WebhookURL)
 	startPostTime := time.Now()
 
 	resp, err1 := createWebhookBackup()
@@ -173,7 +173,7 @@ func tagAllBackups() error {
 
 	//minutely
 	logrus.Debugf("Marking reference + minutely tags")
-	res, err = markReferencesMinutelyMaterializedBackup(tx, options.minutelyParams[1])
+	res, err = markReferencesMinutelyMaterializedBackup(tx, options.MinutelyParams[1])
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error marking reference+minutely tags. err=%s", err)
@@ -182,7 +182,7 @@ func tagAllBackups() error {
 
 	//hourly
 	logrus.Debugf("Marking hourly tags")
-	res, err = markTagMaterializedBackup(tx, "hourly", "minutely", "%Y-%m-%dT%H:0:0.000", "%M", options.hourlyParams[1])
+	res, err = markTagMaterializedBackup(tx, "hourly", "minutely", "%Y-%m-%dT%H:0:0.000", "%M", options.HourlyParams[1])
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error marking hourly tags. err=%s", err)
@@ -191,7 +191,7 @@ func tagAllBackups() error {
 
 	//daily
 	logrus.Debugf("Marking daily tags")
-	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", options.dailyParams[1])
+	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", options.DailyParams[1])
 	if err != nil {
 		tx.Rollback()
 		backupTagCounter.WithLabelValues("error").Inc()
@@ -202,7 +202,7 @@ func tagAllBackups() error {
 
 	//weekly
 	logrus.Debugf("Marking weekly tags")
-	res, err = markTagMaterializedBackup(tx, "weekly", "daily", "%Y-%m-%W-0T0:0:0.000", "%w", options.weeklyParams[1])
+	res, err = markTagMaterializedBackup(tx, "weekly", "daily", "%Y-%m-%W-0T0:0:0.000", "%w", options.WeeklyParams[1])
 	if err != nil {
 		tx.Rollback()
 		backupTagCounter.WithLabelValues("error").Inc()
@@ -213,7 +213,7 @@ func tagAllBackups() error {
 
 	//monthly
 	logrus.Debugf("Marking monthly tags")
-	ref := options.monthlyParams[1]
+	ref := options.MonthlyParams[1]
 	if ref == "L" {
 		ref = "31"
 	}
@@ -228,7 +228,7 @@ func tagAllBackups() error {
 
 	//yearly
 	logrus.Debugf("Marking yearly tags")
-	res, err = markTagMaterializedBackup(tx, "yearly", "monthly", "%Y-0-0T0:0:0.000", "%m", options.yearlyParams[1])
+	res, err = markTagMaterializedBackup(tx, "yearly", "monthly", "%Y-0-0T0:0:0.000", "%m", options.YearlyParams[1])
 	if err != nil {
 		tx.Rollback()
 		backupTagCounter.WithLabelValues("error").Inc()
@@ -258,7 +258,7 @@ func tagAllBackups() error {
 	return nil
 }
 
-func checkBackupTask() {
+func CheckBackupTask() {
 	logrus.Debug("checkBackupTask")
 	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
 	if err != nil {
@@ -304,7 +304,7 @@ func checkGraceTime() {
 	logrus.Debugf("Verifying if current backup is taking too long. If it exceeds graceTime, cancel it on the backend server")
 	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
 	if backupStatus == "running" {
-		if time.Now().Sub(backupDate).Seconds() > options.graceTimeSeconds {
+		if time.Now().Sub(backupDate).Seconds() > options.GraceTimeSeconds {
 			logrus.Warnf("Grace time for backup %s exceeded. Cancelling backup...", backupID)
 			err = deleteWebhookBackup(backupID)
 			if err != nil {

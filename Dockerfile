@@ -1,17 +1,21 @@
-FROM golang:1.10 AS BUILD
+FROM golang:1.12.3 AS BUILD
 
-#doing dependency build separated from source build optimizes time for developer, but is not required
-#install external dependencies first
-ADD /main.go $GOPATH/src/schelly/main.go
-RUN go get github.com/stretchr/testify
-RUN go get -v schelly
+RUN apt-get update && apt-get install -y libgeos-dev
+
+RUN mkdir /schelly
+WORKDIR /schelly
+
+ADD go.mod .
+ADD go.sum .
+RUN go mod download
 
 #now build source code
-ADD schelly $GOPATH/src/schelly
-RUN go get -v schelly
+ADD . ./
+RUN go build -o /go/bin/schelly
 
 
-FROM golang:1.10 AS IMAGE
+
+FROM golang:1.12.3
 
 VOLUME [ "/var/lib/schelly/data" ]
 

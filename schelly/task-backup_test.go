@@ -1,4 +1,4 @@
-package main
+package schelly
 
 import (
 	"fmt"
@@ -7,13 +7,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBackupTagging(t *testing.T) {
 	// logrus.SetLevel(logrus.DebugLevel)
-	initDB()
+	InitDB()
 
 	bid := strconv.Itoa(rand.Int())
 	ti, _ := time.Parse(time.RFC3339, "2006-01-01T15:04:05Z")
@@ -191,12 +191,12 @@ func initMainOptions() {
 	// webhookDeleteBody = "",
 	// graceTimeSeconds = "",
 	// dataDir 		= "",
-	options.minutelyParams = []string{"2", "59"}
-	options.hourlyParams = []string{"3", "59"}
-	options.dailyParams = []string{"3", "23"}
-	options.weeklyParams = []string{"4", "7"}
-	options.monthlyParams = []string{"5", "L"}
-	options.yearlyParams = []string{"2", "12"}
+	options.MinutelyParams = []string{"2", "59"}
+	options.HourlyParams = []string{"3", "59"}
+	options.DailyParams = []string{"3", "23"}
+	options.WeeklyParams = []string{"4", "7"}
+	options.MonthlyParams = []string{"5", "L"}
+	options.YearlyParams = []string{"2", "12"}
 }
 
 func showAllBackups() {

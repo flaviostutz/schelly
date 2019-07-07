@@ -1,14 +1,40 @@
-package main
+package schelly
 
 import (
 	"fmt"
 	"net/http"
 	"os"
 
-	"github.com/Sirupsen/logrus"
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/sirupsen/logrus"
+)
+
+//Options command line options used to run Schelly
+type Options struct {
+	BackupName        string
+	BackupCron        string
+	RetentionCron     string
+	WebhookURL        string
+	WebhookHeaders    map[string]string
+	WebhookCreateBody string
+	WebhookDeleteBody string
+	GraceTimeSeconds  float64
+	DataDir           string
+	ListenPort        int
+	ListenIP          string
+
+	MinutelyParams []string
+	HourlyParams   []string
+	DailyParams    []string
+	WeeklyParams   []string
+	MonthlyParams  []string
+	YearlyParams   []string
+}
+
+var (
+	options Options
 )
 
 var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -18,20 +44,24 @@ var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	"status",
 })
 
-func startRestAPI() {
+func StartRestAPI() {
 	prometheus.MustRegister(apiInvocationsCounter)
 
 	router := mux.NewRouter()
 	router.HandleFunc("/backups", GetBackups).Methods("GET")
 	router.HandleFunc("/backups", TriggerBackup).Methods("POST")
 	router.Handle("/metrics", promhttp.Handler())
-	listen := fmt.Sprintf("%s:%d", options.listenIP, options.listenPort)
+	listen := fmt.Sprintf("%s:%d", options.ListenIP, options.ListenPort)
 	logrus.Infof("Listening at %s", listen)
 	err := http.ListenAndServe(listen, router)
 	if err != nil {
 		logrus.Errorf("Error while listening requests: %s", err)
 		os.Exit(1)
 	}
+}
+
+func SetOptions(opt Options) {
+	options = opt
 }
 
 //GetBackups get currently tracked backups
