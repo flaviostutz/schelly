@@ -8,22 +8,25 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+//BackupSpec bs
 type BackupSpec struct {
-	ID                  string     `json:"id,omitempty" bson:"id"`
-	Name                string     `json:"name,omitempty" bson:"name"`
-	Enabled             bool       `json:"enabled,omitempty" bson:"enabled"`
-	WorkflowName        string     `json:"workflowName,omitempty" bson:"workflowName"`
-	WorkflowVersion     string     `json:"workflowVersion,omitempty" bson:"workflowVersion"`
-	CheckWarningSeconds int        `json:"checkWarningSeconds,omitempty" bson:"checkWarningSeconds"`
-	FromDate            *time.Time `json:"fromDate,omitempty" bson:"fromDate"`
-	ToDate              *time.Time `json:"toDate,omitempty" bson:"toDate"`
-	LastUpdate          time.Time  `json:"lastUpdate,omitempty" bson:"lastUpdate"`
-	RetentionMinutely   string     `json:"retentionMinutely,omitempty"`
-	RetentionHourly     string     `json:"retentionHourly,omitempty"`
-	RetentionDaily      string     `json:"retentionDaily,omitempty"`
-	RetentionWeekly     string     `json:"retentionWeekly,omitempty"`
-	RetentionMonthly    string     `json:"retentionMonthly,omitempty"`
-	RetentionYearly     string     `json:"retentionYearly,omitempty"`
+	ID                         string     `json:"id,omitempty" bson:"id"`
+	Name                       string     `json:"name,omitempty" bson:"name"`
+	Enabled                    bool       `json:"enabled,omitempty" bson:"enabled"`
+	WorkflowName               string     `json:"workflowName,omitempty" bson:"workflowName"`
+	WorkflowVersion            string     `json:"workflowVersion,omitempty" bson:"workflowVersion"`
+	CheckWarningSeconds        int        `json:"checkWarningSeconds,omitempty" bson:"checkWarningSeconds"`
+	FromDate                   *time.Time `json:"fromDate,omitempty" bson:"fromDate"`
+	ToDate                     *time.Time `json:"toDate,omitempty" bson:"toDate"`
+	LastUpdate                 time.Time  `json:"lastUpdate,omitempty" bson:"lastUpdate"`
+	RetentionMinutelyCount     int32      `json:"retentionMinutelyCount,omitempty"`
+	RetentionMinutelyReference string     `json:"retentionMinutelyReference,omitempty"`
+	RetentionHourlyCount       int32      `json:"retentionHourlyCount,omitempty"`
+	RetentionHourlyReference   string     `json:"retentionHourlyReference,omitempty"`
+	RetentionDailyCount        int32      `json:"retentionDailyCount,omitempty"`
+	RetentionWeeklyReference   string     `json:"retentionWeeklyReference,omitempty"`
+	RetentionMonthlyCount      int32      `json:"retentionMonthlyCount,omitempty"`
+	RetentionYearlyReference   string     `json:"retentionYearlyReference,omitempty"`
 }
 
 func createBackupSpec(bs BackupSpec) error {
@@ -104,7 +107,7 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 		where = "WHERE status='" + status + "'"
 	}
 	q := `SELECT 
-			id, name, enabled, status, workflow_name, workflow_version, 
+			id, name, enabled, workflow_name, workflow_version, 
 			check_warning_seconds, from_date, to_date, last_update, 
 			retention_minutely, retention_hourly, retention_daily, retention_weekly, 
 			retention_monthly, retention_yearly
@@ -120,7 +123,7 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 	var backups = make([]BackupSpec, 0)
 	for rows.Next() {
 		b := BackupSpec{}
-		err2 := rows.Scan(&b.ID, &b.Name, &b.Enabled, &b.Status, &b.WorkflowName, &b.WorkflowVersion,
+		err2 := rows.Scan(&b.ID, &b.Name, &b.Enabled, &b.WorkflowName, &b.WorkflowVersion,
 			&b.CheckWarningSeconds, &b.FromDate, &b.ToDate, &b.LastUpdate,
 			&b.RetentionMinutely, &b.RetentionHourly, &b.RetentionDaily, &b.RetentionWeekly,
 			&b.RetentionMonthly, &b.RetentionYearly)

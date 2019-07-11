@@ -20,25 +20,6 @@ var metricsSQLCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	"status",
 })
 
-type BackupSpec struct {
-	Name                string     `json:"name,omitempty" bson:"name"`
-	Enabled             bool       `json:"enabled,omitempty" bson:"enabled"`
-	Status              string     `json:"status,omitempty" bson:"status"`
-	WorkflowName        string     `json:"workflowName,omitempty" bson:"workflowName"`
-	WorkflowVersion     string     `json:"workflowVersion,omitempty" bson:"workflowVersion"`
-	ParallelRuns        bool       `json:"parallelRuns,omitempty" bson:"parallelRuns"`
-	CheckWarningSeconds int        `json:"checkWarningSeconds,omitempty" bson:"checkWarningSeconds"`
-	FromDate            *time.Time `json:"fromDate,omitempty" bson:"fromDate"`
-	ToDate              *time.Time `json:"toDate,omitempty" bson:"toDate"`
-	LastUpdate          time.Time  `json:"lastUpdate,omitempty" bson:"lastUpdate"`
-	RetentionMinutely   string     `json:"retentionMinutely,omitempty"`
-	RetentionHourly     string     `json:"retentionHourly,omitempty"`
-	RetentionDaily      string     `json:"retentionDaily,omitempty"`
-	RetentionWeekly     string     `json:"retentionWeekly,omitempty"`
-	RetentionMonthly    string     `json:"retentionMonthly,omitempty"`
-	RetentionYearly     string     `json:"retentionYearly,omitempty"`
-}
-
 //MaterializedBackup backup record
 type MaterializedBackup struct {
 	ID         string
@@ -92,14 +73,14 @@ func InitDB() error {
 	return nil
 }
 
-func setCurrentTaskStatus(id string, status string, date time.Time) error {
+func setCurrentTaskStatus(backupID string, status string, date time.Time) error {
 	ft := date.Format(time.RFC3339)
-	return ioutil.WriteFile(fmt.Sprintf("%s/backup-task", options.DataDir), []byte(fmt.Sprintf("%s|%s|%s", id, status, ft)), 0644)
+	return ioutil.WriteFile(fmt.Sprintf("%s/backup-task-%s", options.DataDir), []byte(fmt.Sprintf("%s|%s|%s", backupID, status, ft)), 0644)
 }
 
 //returns backupId, backupStatus, time, error
-func getCurrentTaskStatus() (string, string, time.Time, error) {
-	b, err := ioutil.ReadFile(fmt.Sprintf("%s/backup-task", options.DataDir))
+func getCurrentTaskStatus(backupName string) (string, string, time.Time, error) {
+	b, err := ioutil.ReadFile(fmt.Sprintf("%s/backup-task-%s", options.DataDir, backupName))
 	line := string(b)
 	if err != nil {
 		return "", "", time.Now(), err
