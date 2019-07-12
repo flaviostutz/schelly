@@ -2,6 +2,7 @@ package schelly
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -10,28 +11,25 @@ import (
 
 //BackupSpec bs
 type BackupSpec struct {
-	ID                         string     `json:"id,omitempty" bson:"id"`
-	Name                       string     `json:"name,omitempty" bson:"name"`
-	Enabled                    bool       `json:"enabled,omitempty" bson:"enabled"`
-	WorkflowName               string     `json:"workflowName,omitempty" bson:"workflowName"`
-	WorkflowVersion            string     `json:"workflowVersion,omitempty" bson:"workflowVersion"`
-	CheckWarningSeconds        int        `json:"checkWarningSeconds,omitempty" bson:"checkWarningSeconds"`
-	FromDate                   *time.Time `json:"fromDate,omitempty" bson:"fromDate"`
-	ToDate                     *time.Time `json:"toDate,omitempty" bson:"toDate"`
-	LastUpdate                 time.Time  `json:"lastUpdate,omitempty" bson:"lastUpdate"`
-	RetentionMinutelyCount     int32      `json:"retentionMinutelyCount,omitempty"`
-	RetentionMinutelyReference string     `json:"retentionMinutelyReference,omitempty"`
-	RetentionHourlyCount       int32      `json:"retentionHourlyCount,omitempty"`
-	RetentionHourlyReference   string     `json:"retentionHourlyReference,omitempty"`
-	RetentionDailyCount        int32      `json:"retentionDailyCount,omitempty"`
-	RetentionWeeklyReference   string     `json:"retentionWeeklyReference,omitempty"`
-	RetentionMonthlyCount      int32      `json:"retentionMonthlyCount,omitempty"`
-	RetentionYearlyReference   string     `json:"retentionYearlyReference,omitempty"`
+	Name                string     `json:"name,omitempty" bson:"name"`
+	Enabled             bool       `json:"enabled,omitempty" bson:"enabled"`
+	WorkflowName        string     `json:"workflowName,omitempty" bson:"workflowName"`
+	WorkflowVersion     string     `json:"workflowVersion,omitempty" bson:"workflowVersion"`
+	CheckWarningSeconds int        `json:"checkWarningSeconds,omitempty" bson:"checkWarningSeconds"`
+	FromDate            *time.Time `json:"fromDate,omitempty" bson:"fromDate"`
+	ToDate              *time.Time `json:"toDate,omitempty" bson:"toDate"`
+	LastUpdate          time.Time  `json:"lastUpdate,omitempty" bson:"lastUpdate"`
+	RetentionMinutely   string     `json:"retentionMinutely,omitempty"`
+	RetentionHourly     string     `json:"retentionHourly,omitempty"`
+	RetentionDaily      string     `json:"retentionDaily,omitempty"`
+	RetentionWeekly     string     `json:"retentionWeekly,omitempty"`
+	RetentionMonthly    string     `json:"retentionMonthly,omitempty"`
+	RetentionYearly     string     `json:"retentionYearly,omitempty"`
 }
 
 func createBackupSpec(bs BackupSpec) error {
 	stmt, err1 := db.Prepare(`INSERT INTO backup_spec (
-								id, name, enabled, workflow_name, workflow_version, 
+								name, enabled, workflow_name, workflow_version, 
 								check_warning_seconds, from_date, to_date, last_update, 
 								retention_minutely, retention_hourly, retention_daily, retention_weekly, 
 								retention_monthly, retention_yearly
@@ -39,7 +37,7 @@ func createBackupSpec(bs BackupSpec) error {
 	if err1 != nil {
 		return err1
 	}
-	_, err2 := stmt.Exec(bs.ID, bs.Name, bs.Enabled, bs.WorkflowName, bs.WorkflowVersion,
+	_, err2 := stmt.Exec(bs.Name, bs.Enabled, bs.WorkflowName, bs.WorkflowVersion,
 		bs.CheckWarningSeconds, bs.FromDate, bs.ToDate, bs.LastUpdate,
 		bs.RetentionMinutely, bs.RetentionHourly, bs.RetentionDaily, bs.RetentionWeekly,
 		bs.RetentionMonthly, bs.RetentionYearly)
@@ -55,7 +53,7 @@ func updateBackupSpec(bs BackupSpec) error {
 								check_warning_seconds=?, from_date=?, to_date=?, last_update=?, 
 								retention_minutely=?, retention_hourly=?, retention_daily=?, retention_weekly=?, 
 								retention_monthly=?, retention_yearly=? 
-							  WHERE id='` + bs.ID + `'`)
+							  WHERE name='` + bs.Name + `'`)
 	if err1 != nil {
 		return err1
 	}
@@ -69,13 +67,13 @@ func updateBackupSpec(bs BackupSpec) error {
 	return nil
 }
 
-func getBackupSpec(id string) (BackupSpec, error) {
+func getBackupSpec(backupName string) (BackupSpec, error) {
 	rows, err1 := db.Query(`SELECT 
-			id, name, enabled, workflow_name, workflow_version, 
+			name, enabled, workflow_name, workflow_version, 
 			check_warning_seconds, from_date, to_date, last_update, 
 			retention_minutely, retention_hourly, retention_daily, retention_weekly, 
 			retention_monthly, retention_yearly
-			FROM backup_spec WHERE id='` + id + `'`)
+			FROM backup_spec WHERE name='` + backupName + `'`)
 	if err1 != nil {
 		return BackupSpec{}, err1
 	}
@@ -83,7 +81,7 @@ func getBackupSpec(id string) (BackupSpec, error) {
 
 	for rows.Next() {
 		b := BackupSpec{}
-		err2 := rows.Scan(&b.ID, &b.Name, &b.Enabled, &b.WorkflowName, &b.WorkflowVersion,
+		err2 := rows.Scan(&b.Name, &b.Enabled, &b.WorkflowName, &b.WorkflowVersion,
 			&b.CheckWarningSeconds, &b.FromDate, &b.ToDate, &b.LastUpdate,
 			&b.RetentionMinutely, &b.RetentionHourly, &b.RetentionDaily, &b.RetentionWeekly,
 			&b.RetentionMonthly, &b.RetentionYearly)
@@ -97,7 +95,7 @@ func getBackupSpec(id string) (BackupSpec, error) {
 	if err != nil {
 		return BackupSpec{}, err
 	} else {
-		return BackupSpec{}, fmt.Errorf("Backup spec id %s not found", id)
+		return BackupSpec{}, fmt.Errorf("Backup spec name %s not found", backupName)
 	}
 }
 
@@ -107,7 +105,7 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 		where = "WHERE status='" + status + "'"
 	}
 	q := `SELECT 
-			id, name, enabled, workflow_name, workflow_version, 
+			name, enabled, workflow_name, workflow_version, 
 			check_warning_seconds, from_date, to_date, last_update, 
 			retention_minutely, retention_hourly, retention_daily, retention_weekly, 
 			retention_monthly, retention_yearly
@@ -123,7 +121,7 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 	var backups = make([]BackupSpec, 0)
 	for rows.Next() {
 		b := BackupSpec{}
-		err2 := rows.Scan(&b.ID, &b.Name, &b.Enabled, &b.WorkflowName, &b.WorkflowVersion,
+		err2 := rows.Scan(&b.Name, &b.Enabled, &b.WorkflowName, &b.WorkflowVersion,
 			&b.CheckWarningSeconds, &b.FromDate, &b.ToDate, &b.LastUpdate,
 			&b.RetentionMinutely, &b.RetentionHourly, &b.RetentionDaily, &b.RetentionWeekly,
 			&b.RetentionMonthly, &b.RetentionYearly)
@@ -140,9 +138,9 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 	return backups, nil
 }
 
-func deleteBackupSpec(id string) error {
+func deleteBackupSpec(backupName string) error {
 	stmt, err1 := db.Prepare(`DELETE backup_spec 
-							  WHERE id='` + id + `'`)
+							  WHERE name='` + backupName + `'`)
 	if err1 != nil {
 		return err1
 	}
@@ -151,4 +149,40 @@ func deleteBackupSpec(id string) error {
 		return err2
 	}
 	return nil
+}
+
+func retentionParams(config string, lastReference string) []string {
+	if config == "" {
+		return []string{"0", lastReference}
+	}
+	params := strings.Split(config, "@")
+	if len(params) == 1 {
+		params = append(params, "L")
+	}
+	if params[1] == "" {
+		params[1] = "L"
+	}
+	if params[1] == "L" {
+		params[1] = lastReference
+	}
+	return params
+}
+
+func (b *BackupSpec) MinutelyParams() []string {
+	return retentionParams(b.RetentionMinutely, "59")
+}
+func (b *BackupSpec) HourlyParams() []string {
+	return retentionParams(b.RetentionHourly, "59")
+}
+func (b *BackupSpec) DailyParams() []string {
+	return retentionParams(b.RetentionDaily, "23")
+}
+func (b *BackupSpec) WeeklyParams() []string {
+	return retentionParams(b.RetentionWeekly, "7")
+}
+func (b *BackupSpec) MonthlyParams() []string {
+	return retentionParams(b.RetentionMonthly, "L")
+}
+func (b *BackupSpec) YearlyParams() []string {
+	return retentionParams(b.RetentionYearly, "12")
 }

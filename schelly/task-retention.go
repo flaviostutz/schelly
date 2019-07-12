@@ -27,29 +27,36 @@ var retentionBackupsRetriesCounter = prometheus.NewCounter(prometheus.CounterOpt
 	Help: "Total retention backup delete retries",
 })
 
-var runningTask = false
-
-//avoid doing webhook operations in parallel
+var retentionInitialized = false
 var avoidRetentionLock = &sync.Mutex{}
 
-func InitRetention() {
-	prometheus.MustRegister(retentionTasksCounter)
-	prometheus.MustRegister(retentionBackupsDeleteCounter)
-	prometheus.MustRegister(retentionBackupsRetriesCounter)
+type RetentionTask struct {
+	Spec    BackupSpec
+	running bool
 }
 
-func RunRetentionTask() {
-	if runningTask {
-		logrus.Debug("runRetentionTask already running. skipping new task creation")
+func NewRetentionTask(Spec BackupSpec) BackupTask {
+	if !retentionInitialized {
+		prometheus.MustRegister(retentionTasksCounter)
+		prometheus.MustRegister(retentionBackupsDeleteCounter)
+		prometheus.MustRegister(retentionBackupsRetriesCounter)
+		retentionInitialized = true
+	}
+	return BackupTask{Spec, false}
+}
+
+func (r *RetentionTask) RunRetentionTask() {
+	if r.running {
+		logrus.Debugf("runRetentionTask for %s already running. skipping new task creation", r.Spec.Name)
 		return
 	} else {
-		runningTask = true
+		r.running = true
 	}
-	triggerRetentionTask()
-	runningTask = false
+	r.triggerRetentionTask()
+	r.running = false
 }
 
-func triggerRetentionTask() {
+func (r *RetentionTask) triggerRetentionTask() {
 	start := time.Now()
 	logrus.Info("")
 	logrus.Info(">>>> BACKUP RETENTION MANAGEMENT")
@@ -57,18 +64,18 @@ func triggerRetentionTask() {
 
 	avoidRetentionLock.Lock()
 
-	tagAllBackups()
+	tagAllBackups(r.Spec)
 
-	logrus.Debugf("Retention policy: minutely=%s, hourly=%s, daily=%s, weekly=%s, monthly=%s, yearly=%s", options.MinutelyParams[0], options.HourlyParams[0], options.DailyParams[0], options.WeeklyParams[0], options.MonthlyParams[0], options.YearlyParams[0])
+	logrus.Debugf("Retention policy: minutely=%s, hourly=%s, daily=%s, weekly=%s, monthly=%s, yearly=%s", r.Spec.MinutelyParams()[0], r.Spec.HourlyParams()[0], r.Spec.DailyParams()[0], r.Spec.WeeklyParams()[0], r.Spec.MonthlyParams()[0], r.Spec.YearlyParams()[0])
 
 	electedBackups := make([]MaterializedBackup, 0)
-	electedBackups = appendElectedForTag("", "0", electedBackups)
-	electedBackups = appendElectedForTag("minutely", options.MinutelyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("hourly", options.HourlyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("daily", options.DailyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("weekly", options.WeeklyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("monthly", options.MonthlyParams[0], electedBackups)
-	electedBackups = appendElectedForTag("yearly", options.YearlyParams[0], electedBackups)
+	electedBackups = r.appendElectedForTag("", "0", electedBackups)
+	electedBackups = r.appendElectedForTag("minutely", r.Spec.MinutelyParams()[0], electedBackups)
+	electedBackups = r.appendElectedForTag("hourly", r.Spec.HourlyParams()[0], electedBackups)
+	electedBackups = r.appendElectedForTag("daily", r.Spec.DailyParams()[0], electedBackups)
+	electedBackups = r.appendElectedForTag("weekly", r.Spec.WeeklyParams()[0], electedBackups)
+	electedBackups = r.appendElectedForTag("monthly", r.Spec.MonthlyParams()[0], electedBackups)
+	electedBackups = r.appendElectedForTag("yearly", r.Spec.YearlyParams()[0], electedBackups)
 	logrus.Infof("%d backups elected for deletion", len(electedBackups))
 
 	for _, backup := range electedBackups {
@@ -114,9 +121,9 @@ func performBackupDelete(backupID string) {
 	}
 }
 
-func RetryDeleteErrors() {
+func (r *RetentionTask) RetryDeleteErrors() {
 	logrus.Debugf("Retrying webhook delete for backups with 'delete-error' tag")
-	backups, err := getMaterializedBackups(10, "", "delete-error", true)
+	backups, err := getMaterializedBackups(r.Spec.Name, 10, "", "delete-error", true)
 	if err != nil {
 		logrus.Errorf("Couldn't query backups tagged as 'delete-error'. err=%s", err)
 	} else if len(backups) > 0 {
@@ -130,13 +137,13 @@ func RetryDeleteErrors() {
 	}
 }
 
-func appendElectedForTag(tag string, retentionCount string, appendTo []MaterializedBackup) []MaterializedBackup {
+func (r *RetentionTask) appendElectedForTag(tag string, retentionCount string, appendTo []MaterializedBackup) []MaterializedBackup {
 	ret, err0 := strconv.Atoi(retentionCount)
 	if err0 != nil {
 		logrus.Errorf("%s: Invalid retention parameter: err=%s", tag, err0)
 		return appendTo
 	}
-	mbackups, err := getExclusiveTagAvailableMaterializedBackups(tag, ret, 10)
+	mbackups, err := getExclusiveTagAvailableMaterializedBackups(r.Spec.Name, tag, ret, 10)
 	if err != nil {
 		logrus.Errorf("%s: Error querying backups for deletion. err=%s", tag, err)
 		return appendTo

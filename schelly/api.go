@@ -1,120 +1,49 @@
 package schelly
 
 import (
-	"fmt"
 	"net/http"
-	"os"
+	"time"
 
-	"github.com/gorilla/mux"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+
+	cors "github.com/itsjamie/gin-cors"
 )
 
-//Options command line options used to run Schelly
-type Options struct {
-	BackupName        string
-	BackupCron        string
-	RetentionCron     string
-	WebhookURL        string
-	WebhookHeaders    map[string]string
-	WebhookCreateBody string
-	WebhookDeleteBody string
-	GraceTimeSeconds  float64
-	DataDir           string
-	ListenPort        int
-	ListenIP          string
-
-	MinutelyParams []string
-	HourlyParams   []string
-	DailyParams    []string
-	WeeklyParams   []string
-	MonthlyParams  []string
-	YearlyParams   []string
+type HTTPServer struct {
+	server *http.Server
+	router *gin.Engine
 }
 
-var (
-	options Options
-)
+func NewHTTPServer(opt0 Options) *HTTPServer {
+	router := gin.Default()
+	opt = opt0
 
-var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "schelly_api_invocations_total",
-	Help: "Total api requests served",
-}, []string{
-	"status",
-})
+	router.Use(cors.Middleware(cors.Config{
+		Origins:         "*",
+		Methods:         "GET",
+		RequestHeaders:  "Origin, Content-Type",
+		ExposedHeaders:  "",
+		MaxAge:          24 * 3600 * time.Second,
+		Credentials:     false,
+		ValidateHeaders: false,
+	}))
 
-func StartRestAPI() {
-	prometheus.MustRegister(apiInvocationsCounter)
+	h := &HTTPServer{server: &http.Server{
+		Addr:    ":5000",
+		Handler: router,
+	}, router: router}
 
-	router := mux.NewRouter()
-	router.HandleFunc("/backups", GetBackups).Methods("GET")
-	router.HandleFunc("/backups", TriggerBackup).Methods("POST")
-	router.Handle("/metrics", promhttp.Handler())
-	listen := fmt.Sprintf("%s:%d", options.ListenIP, options.ListenPort)
-	logrus.Infof("Listening at %s", listen)
-	err := http.ListenAndServe(listen, router)
-	if err != nil {
-		logrus.Errorf("Error while listening requests: %s", err)
-		os.Exit(1)
-	}
+	logrus.Infof("Initializing HTTP Handlers...")
+	h.setupMaterializedHandlers()
+	h.setupBackupSpecHandlers()
+
+	return h
 }
 
-func SetOptions(opt Options) {
-	options = opt
+//Start the main HTTP Server entry
+func (s *HTTPServer) Start() error {
+	logrus.Infof("Starting HTTP Server on port 5000")
+	return s.server.ListenAndServe()
 }
 
-//GetBackups get currently tracked backups
-func GetBackups(w http.ResponseWriter, r *http.Request) {
-	logrus.Debugf("GetBackups r=%s", r)
-	tag := r.URL.Query().Get("tag")
-	status := r.URL.Query().Get("status")
-	backups, err := getMaterializedBackups(0, tag, status, false)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		apiInvocationsCounter.WithLabelValues("error").Inc()
-		return
-	}
-
-	rjson := ""
-	for _, b := range backups {
-		tags := ""
-
-		bt := getTags(b)
-		for _, tag := range bt {
-			if tags != "" {
-				tags = tags + ","
-			}
-			tags = tags + "\"" + tag + "\""
-		}
-
-		if rjson != "" {
-			rjson = rjson + ","
-		}
-		rjson = rjson + "{\"id\":\"" + b.ID + "\", \"data_id\":\"" + b.DataID + "\", \"status\":\"" + b.Status + "\", \"start_time\":\"" + fmt.Sprintf("%s", b.StartTime) + "\", \"end_time\":\"" + fmt.Sprintf("%s", b.EndTime) + "\", \"size\":\"" + fmt.Sprintf("%f", b.SizeMB) + "\", \"custom_data\":\"" + b.CustomData + "\", \"tags\":[" + tags + "]}"
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte("[" + rjson + "]"))
-	logrus.Debugf("result: %s", "["+rjson+"]")
-	apiInvocationsCounter.WithLabelValues("success").Inc()
-}
-
-//TriggerBackup get currently tracked backups
-func TriggerBackup(w http.ResponseWriter, r *http.Request) {
-	logrus.Debugf("TriggerBackup r=%s", r)
-	result, err := triggerNewBackup()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		apiInvocationsCounter.WithLabelValues("error").Inc()
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	rs := "{}"
-	if result.ID != "" {
-		rs = "{id:'" + result.ID + "',status:'" + result.Status + "',message:'" + result.Message + "'}"
-	}
-	w.Write([]byte(rs))
-	logrus.Debugf("result: %s", rs)
-	apiInvocationsCounter.WithLabelValues("success").Inc()
-}
