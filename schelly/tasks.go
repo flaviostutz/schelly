@@ -14,7 +14,6 @@ type Options struct {
 	BackupCron      string
 	RetentionCron   string
 	ConductorAPIURL string
-	BackupTimeout   float64
 	DataDir         string
 	ListenPort      int
 	ListenIP        string

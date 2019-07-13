@@ -5,27 +5,19 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 )
 
-var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "schelly_api_invocations_total",
-	Help: "Total api requests served",
-}, []string{
-	"entity",
-	"status",
-})
-
-func (h *HTTPServer) setupMaterializedHandlers(opt Options) {
-	prometheus.MustRegister(apiInvocationsCounter)
-	h.router.GET("/backup/:name/materialized", ListMaterizalized(opt))
-	h.router.POST("/backup/:name/materialized", TriggerBackup(opt))
+func (h *HTTPServer) setupBackupSpecHandlers(opt Options) {
+	h.router.GET("/backup/:name", ListBackupSpecs(opt))
+	h.router.POST("/backup", CreateBackupSpec(opt))
+	h.router.PUT("/backup/:name", UpdatedBackupSpec(opt))
 }
 
 //ListMaterizalized get currently tracked backups
-func ListMaterizalized(opt Options) func(*gin.Context) {
+func ListBackupSpecs(opt Options) func(*gin.Context) {
 	return func(c *gin.Context) {
+		parei aqui
 		logrus.Debugf("ListMaterizalized")
 		tag := c.Query("tag")
 		status := c.Query("status")
@@ -44,7 +36,7 @@ func ListMaterizalized(opt Options) func(*gin.Context) {
 }
 
 //TriggerBackup get currently tracked backups
-func TriggerBackup(opt Options) func(*gin.Context) {
+func CreateBackupSpec(opt Options) func(*gin.Context) {
 	return func(c *gin.Context) {
 		logrus.Debugf("TriggerBackup")
 		bn := c.Param("name")

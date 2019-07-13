@@ -19,11 +19,7 @@ FROM golang:1.12.3
 
 VOLUME [ "/var/lib/schelly/data" ]
 
-ENV BACKUP_NAME             ''
-ENV BACKUP_CRON_STRING      ''
-ENV RETENTION_CRON_STRING   ''
 ENV CONDUCTOR_API_URL       ''
-ENV WEBHOOK_GRACE_TIME      3600
 ENV DATA_DIR                '/var/lib/schelly/data'
 
 COPY --from=BUILD /go/bin/* /bin/

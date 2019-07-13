@@ -44,8 +44,8 @@ var backupTriggerCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 })
 
 var backupMaterializedCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
-	Name: "schelly_backup_materialized_total",
-	Help: "Total backups materialized",
+	Name: "schelly_workflow_total",
+	Help: "Total backup workflows",
 }, []string{
 	"backup",
 	"status",
@@ -68,11 +68,11 @@ var overallBackupWarnCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 })
 
 type BackupTask struct {
-	Spec              BackupSpec
-	runningBackupTask bool
+	backupName string
+	running    bool
 }
 
-func NewBackupTask(Spec BackupSpec) BackupTask {
+func newBackupTask(backupName string) BackupTask {
 	if !metricsInitialized {
 		prometheus.MustRegister(backupLastSizeGauge)
 		prometheus.MustRegister(backupLastTimeGauge)
@@ -82,88 +82,163 @@ func NewBackupTask(Spec BackupSpec) BackupTask {
 		prometheus.MustRegister(overallBackupWarnCounter)
 		metricsInitialized = true
 	}
-	return BackupTask{Spec, false}
+	return BackupTask{backupName, false}
 }
 
-func (b *BackupTask) RunBackupTask() {
-	if b.runningBackupTask {
+func (b *BackupTask) runBackupTask() {
+	if b.running {
 		logrus.Debug("runBackupTask already running. skipping new task creation")
-		backupTasksCounter.WithLabelValues(b.Spec.Name, "skipped").Inc()
-		overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "warning").Inc()
+		backupTasksCounter.WithLabelValues(b.backupName, "skipped").Inc()
+		overallBackupWarnCounter.WithLabelValues(b.backupName, "warning").Inc()
 		return
-	} else {
-		b.runningBackupTask = true
-		backupTasksCounter.WithLabelValues(b.Spec.Name, "run").Inc()
 	}
+
+	b.running = true
+	backupTasksCounter.WithLabelValues(b.backupName, "run").Inc()
 
 	start := time.Now()
 
-	for b.runningBackupTask {
-		_, err := b.triggerNewBackup()
+	for b.running {
 		elapsed := time.Now().Sub(start)
+		wid, err := triggerNewBackup(b.backupName)
 		if err != nil {
-			if elapsed.Seconds() < opt.BackupTimeout {
-				logrus.Errorf("Error triggering backup. Retrying until grace time in 5 seconds. err=%s", err)
-				time.Sleep(5 * time.Second)
-				backupTriggerCounter.WithLabelValues(b.Spec.Name, "retry").Inc()
-				overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "warning").Inc()
-			} else {
-				logrus.Errorf("Error triggering backup. Grace time reached. Won't retry anymore. err=%s", err)
-				b.runningBackupTask = false
-				backupTriggerCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-				overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-			}
+			// if elapsed.Seconds() < float64(b.Spec.TimeoutSeconds)/2.0 {
+			logrus.Errorf("Error launching backup workflow for backup %s. Retrying in 5 seconds. err=%s", b.backupName, err)
+			time.Sleep(5 * time.Second)
+			backupTriggerCounter.WithLabelValues(b.backupName, "retry").Inc()
+			overallBackupWarnCounter.WithLabelValues(b.backupName, "warning").Inc()
+			// } else {
+			// logrus.Errorf("Error triggering backup. Won't retry anymore. err=%s", err)
+			// b.running = false
+			// backupTriggerCounter.WithLabelValues(b.backupName, "error").Inc()
+			// overallBackupWarnCounter.WithLabelValues(b.backupName, "error").Inc()
+			// }
 		} else {
-			logrus.Infof("Backup task done. elapsed=%s", elapsed)
-			b.runningBackupTask = false
-			backupTriggerCounter.WithLabelValues(b.Spec.Name, "success").Inc()
+			logrus.Infof("Backup launched. elapsed=%s. workflowId=%s", elapsed, wid)
+			b.running = false
+			backupTriggerCounter.WithLabelValues(b.backupName, "success").Inc()
 		}
 	}
 }
 
-func (b *BackupTask) triggerNewBackup() (ResponseWebhook, error) {
+func triggerNewBackup(backupName string) (workflowID string, err3 error) {
 	start := time.Now()
 	logrus.Info("")
-	logrus.Info(">>>> BACKUP TASK")
+	logrus.Info(">>>> BACKUP WORKFLOW LAUNCH %s", backupName)
 
-	logrus.Debugf("Checking if there is another backup running. name=%s", b.Spec.Name)
+	logrus.Debugf("Checking if there is another backup running. name=%s", backupName)
 
-	backupID, backupStatus, backupDate, err := getCurrentTaskStatus(b.Spec.Name)
+	bs, err := getBackupSpec(backupName)
 	if err != nil {
-		return ResponseWebhook{}, fmt.Errorf("Couldn't get current task id from file. err=%s", err)
+		return "", fmt.Errorf("Couldn't load backup spec. err=%s", err)
 	}
 
-	if backupStatus == "running" {
-		logrus.Infof("Another backup task %s is still running (%s). name=%s.", backupID, b.Spec.Name)
-		overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "warning").Inc()
-		return ResponseWebhook{}, nil
+	if bs.RunningWorkflowID != nil {
+		wf, err := getWorkflowInstance(*bs.RunningWorkflowID)
+		if err != nil {
+			return "", fmt.Errorf("Couldn't get workflow id %s for checking if it is running. backup name %s. err=%s", *bs.RunningWorkflowID, backupName, err)
+		}
+		if wf.status == "running" {
+			overallBackupWarnCounter.WithLabelValues(backupName, "warning").Inc()
+			return "", fmt.Errorf("Another backup workflow for backup %s is running (%s). name=%s", backupName, wf.workflowID)
+		}
 	}
 
-	logrus.Debugf("Invoking POST '%s' so that a new backup will be created", options.ConductorAPIURL)
-	startPostTime := time.Now()
-
-	resp, err1 := createWebhookBackup()
+	logrus.Debugf("Launching workflow for backup creation. api=%s", opt.ConductorAPIURL)
+	workflowID, err1 := launchCreateBackupWorkflow(backupName)
 	if err1 != nil {
-		overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-		return resp, fmt.Errorf("Couldn't invoke webhook for backup creation. err=%s", err1)
+		overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+		return "", fmt.Errorf("Couldn't invoke Conductor workflow for backup creation. err=%s", err1)
 	}
 
-	if resp.Status == "running" {
-		logrus.Infof("Backup invoked successfuly. Starting to check for completion from time to time. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
-	} else {
-		logrus.Warnf("Backup invoked but an unrecognized status was returned. Won't track it. id=%s; status=%s message=%s", resp.ID, resp.Status, resp.Message)
-		overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-		setCurrentTaskStatus(resp.ID, resp.Status, startPostTime)
-	}
+	logrus.Infof("Workflow launched successfuly. workflowID=%s", workflowID)
+	updateBackupSpecRunningWorkflowID(backupName, &workflowID)
 
 	elapsed := time.Now().Sub(start)
 	logrus.Debugf("Backup triggering done. elapsed=%s", elapsed)
-	return resp, nil
+	return workflowID, nil
 }
 
-func tagAllBackups(backupSpec BackupSpec) error {
+func checkBackupWorkflow(backupName string) {
+	logrus.Debugf("checkBackupTask %s", backupName)
+	bs, err := getBackupSpec(backupName)
+	if err != nil {
+		logrus.Debugf("Couldn't get backup spec %s. err=%s", backupName, err)
+		overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+	}
+	if bs.RunningWorkflowID == nil {
+		logrus.Debugf("Backup Spec %s has no running workflow set", backupName)
+		return
+	}
+	wf, err0 := getWorkflowInstance(*bs.RunningWorkflowID)
+	if err0 != nil {
+		logrus.Debugf("Couldn't get workflow instance %s. err=%s", *bs.RunningWorkflowID, err0)
+		overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+		return
+	}
+
+	if wf.status == "running" {
+		if time.Now().Sub(wf.startTime).Seconds() > float64(bs.TimeoutSeconds) {
+			logrus.Warnf("Backup %s timeout. Check conductor workflow", backupName)
+			// logrus.Warnf("Backup %s timeout. Cancelling backup...", backupName)
+			// logrus.Debugf("Invoking POST '%s' so that a new backup will be created", opt.ConductorAPIURL)
+			// workflowID, err1 := launchWorkflow(backupName, WORKFLOW_CANCEL)
+			// if err1 != nil {
+			// 	overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+			// 	return fmt.Errorf("Couldn't invoke Conductor workflow for backup creation. err=%s", err1)
+			// }
+			// logrus.Infof("Backup %s cancel workflow launched successfuly", backupName)
+			// // setCurrentTaskStatus(backupID, "cancelled", backupDate)
+			// overallBackupWarnCounter.WithLabelValues(backupName, "timeout").Inc()
+		}
+		return
+	}
+
+	logrus.Infof("Conductor workflow id %s finish detected. status=%s. backup=%s", wf.workflowID, wf.status, backupName)
+	//avoid doing retention until the newly created backup is tagged to avoid it to be elected for removal (because it will have no tags)
+	avoidRetentionLock.Lock()
+	defer avoidRetentionLock.Unlock()
+
+	backupMaterializedCounter.WithLabelValues(backupName, wf.status).Inc()
+
+	if wf.status == "completed" {
+		if *wf.dataID == "" {
+			logrus.Warnf("Workflow %s has completed but returned no dataID. Check worker. Backup will be ignored", wf.workflowID)
+			backupMaterializedCounter.WithLabelValues(backupName, "completed-nodataid").Inc()
+		}
+	}
+
+	updateBackupSpecRunningWorkflowID(backupName, nil)
+	err1 := createMaterializedBackup(wf.workflowID, backupName, wf.dataID, wf.status, wf.startTime, wf.endTime, wf.dataSizeMB)
+	if err1 != nil {
+		logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
+		overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+		return
+	}
+
+	logrus.Debugf("Materialized backup saved to database successfuly. id=%s", wf.workflowID)
+	updateBackupSpecRunningWorkflowID(backupName, nil)
+	if wf.status == "completed" {
+		backupMaterializedCounter.WithLabelValues(backupName, "success").Inc()
+		backupLastSizeGauge.WithLabelValues(backupName).Set(*wf.dataSizeMB)
+		backupLastTimeGauge.WithLabelValues(backupName).Set(float64(time.Now().Sub(wf.endTime).Seconds()))
+	} else {
+		backupMaterializedCounter.WithLabelValues(backupName, "error").Inc()
+	}
+	err = tagAllBackups(backupName)
+	if err != nil {
+		logrus.Errorf("Error tagging backups. err=%s", err)
+		overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
+	}
+}
+
+func tagAllBackups(backupName string) error {
 	logrus.Debugf("Tagging backups")
+
+	bs, err := getBackupSpec(backupName)
+	if err != nil {
+		return fmt.Errorf("Couldn't load backup spec. err=%s", err)
+	}
 
 	//begin transaction
 	logrus.Debug("Begining db transaction")
@@ -174,7 +249,7 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//check last backup
 	logrus.Debug("Checking for backups available")
-	backups, err1 := getMaterializedBackups(backupSpec.Name, 1, "", "available", false)
+	backups, err1 := getMaterializedBackups(bs.Name, 1, "", "available", false)
 	if err1 != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error getting last backup. err=%s", err)
@@ -195,7 +270,7 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//minutely
 	logrus.Debugf("Marking reference + minutely tags")
-	res, err = markReferencesMinutelyMaterializedBackup(tx, backupSpec.Name, backupSpec.MinutelyParams()[1])
+	res, err = markReferencesMinutelyMaterializedBackup(tx, bs.Name, bs.MinutelyParams()[1])
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error marking reference+minutely tags. err=%s", err)
@@ -204,7 +279,7 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//hourly
 	logrus.Debugf("Marking hourly tags")
-	res, err = markTagMaterializedBackup(tx, "hourly", "minutely", "%Y-%m-%dT%H:0:0.000", "%M", backupSpec.Name, backupSpec.HourlyParams()[1])
+	res, err = markTagMaterializedBackup(tx, "hourly", "minutely", "%Y-%m-%dT%H:0:0.000", "%M", bs.Name, bs.HourlyParams()[1])
 	if err != nil {
 		tx.Rollback()
 		return fmt.Errorf("Error marking hourly tags. err=%s", err)
@@ -213,10 +288,10 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//daily
 	logrus.Debugf("Marking daily tags")
-	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", backupSpec.Name, backupSpec.DailyParams()[1])
+	res, err = markTagMaterializedBackup(tx, "daily", "hourly", "%Y-%m-%w-%dT0:0:0.000", "%H", bs.Name, bs.DailyParams()[1])
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error marking daily tags. err=%s", err)
 	}
 	tc, _ := res.RowsAffected()
@@ -224,10 +299,10 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//weekly
 	logrus.Debugf("Marking weekly tags")
-	res, err = markTagMaterializedBackup(tx, "weekly", "daily", "%Y-%m-%W-0T0:0:0.000", "%w", backupSpec.Name, backupSpec.WeeklyParams()[1])
+	res, err = markTagMaterializedBackup(tx, "weekly", "daily", "%Y-%m-%W-0T0:0:0.000", "%w", bs.Name, bs.WeeklyParams()[1])
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error marking weekly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
@@ -235,14 +310,14 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//monthly
 	logrus.Debugf("Marking monthly tags")
-	ref := backupSpec.MonthlyParams()[1]
+	ref := bs.MonthlyParams()[1]
 	if ref == "L" {
 		ref = "31"
 	}
-	res, err = markTagMaterializedBackup(tx, "monthly", "daily", "%Y-%m-0T0:0:0.000", "%d", ref)
+	res, err = markTagMaterializedBackup(tx, bs.Name, "monthly", "daily", "%Y-%m-0T0:0:0.000", "%d", ref)
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error marking monthly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
@@ -250,10 +325,10 @@ func tagAllBackups(backupSpec BackupSpec) error {
 
 	//yearly
 	logrus.Debugf("Marking yearly tags")
-	res, err = markTagMaterializedBackup(tx, "yearly", "monthly", "%Y-0-0T0:0:0.000", "%m", backupSpec.Name, backupSpec.YearlyParams()[1])
+	res, err = markTagMaterializedBackup(tx, "yearly", "monthly", "%Y-0-0T0:0:0.000", "%m", bs.Name, bs.YearlyParams()[1])
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error marking yearly tags. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
@@ -263,7 +338,7 @@ func tagAllBackups(backupSpec BackupSpec) error {
 	res, err = setAllTagsMaterializedBackup(tx, lastBackup.ID)
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error tagging last backup. err=%s", err)
 	}
 	tc, _ = res.RowsAffected()
@@ -273,74 +348,11 @@ func tagAllBackups(backupSpec BackupSpec) error {
 	err = tx.Commit()
 	if err != nil {
 		tx.Rollback()
-		backupTagCounter.WithLabelValues(backupSpec.Name, "error").Inc()
+		backupTagCounter.WithLabelValues(bs.Name, "error").Inc()
 		return fmt.Errorf("Error commiting transation. err=%s", err)
 	}
-	backupTagCounter.WithLabelValues(backupSpec.Name, "success").Inc()
+	backupTagCounter.WithLabelValues(bs.Name, "success").Inc()
 	return nil
-}
-
-func (b *BackupTask) CheckBackupTask() {
-	logrus.Debugf("checkBackupTask %s", b.Spec.Name)
-	backupID, backupStatus, backupDate, err := getCurrentTaskStatus(backupSpec.Name)
-	if err != nil {
-		logrus.Debugf("Couldn't load task status file. Ignoring. err=%s", err)
-		overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "warning").Inc()
-	}
-	if backupStatus == "running" {
-		resp, err := getWebhookBackupInfo(backupID)
-		if err != nil {
-			logrus.Warnf("Couldn't get backup %s info from webhook. err=%s", backupID, err)
-			b.checkGraceTime()
-		} else {
-			if resp.Status != backupStatus {
-				logrus.Infof("Backup %s finish detected on backend server. status=%s", backupID, resp.Status)
-				//avoid doing retention until the newly created backup is tagged to avoid it to be elected for removal (because it will have no tags)
-				avoidRetentionLock.Lock()
-				mid, err1 := createMaterializedBackup(resp.ID, resp.DataID, resp.Status, backupDate, time.Now(), resp.Message, resp.SizeMB)
-				if err1 != nil {
-					logrus.Errorf("Couldn't create materialized backup on database. err=%s", err1)
-					avoidRetentionLock.Unlock()
-					overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-				} else {
-					logrus.Debugf("Materialized backup reference saved to database successfuly. id=%s", mid)
-					setCurrentTaskStatus(backupID, resp.Status, backupDate)
-					backupMaterializedCounter.WithLabelValues(b.Spec.Name, "success").Inc()
-					if resp.SizeMB != 0 {
-						backupLastSizeGauge.Set(float64(resp.SizeMB))
-					}
-					backupLastTimeGauge.Set(float64(time.Now().Sub(backupDate).Seconds()))
-					err = b.tagAllBackups()
-					if err != nil {
-						overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-					}
-					avoidRetentionLock.Unlock()
-				}
-			}
-			b.checkGraceTime()
-		}
-	}
-}
-
-func (b *BackupTask) checkGraceTime() {
-	logrus.Debugf("Verifying if current backup is taking too long. If it exceeds graceTime, cancel it on the backend server")
-	backupID, backupStatus, backupDate, err := getCurrentTaskStatus()
-	if backupStatus == "running" {
-		if time.Now().Sub(backupDate).Seconds() > options.BackupTimeout {
-			logrus.Warnf("Grace time for backup %s exceeded. Cancelling backup...", backupID)
-			err = deleteWebhookBackup(backupID)
-			if err != nil {
-				logrus.Errorf("Couldn't cancel running backup %s task on webhook. err=%s", backupID, err)
-				backupMaterializedCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-				setCurrentTaskStatus(backupID, "error", backupDate)
-			} else {
-				logrus.Infof("Running backup task %s cancelled on webhook successfuly", backupID)
-				backupMaterializedCounter.WithLabelValues(b.Spec.Name, "cancelled").Inc()
-				setCurrentTaskStatus(backupID, "cancelled", backupDate)
-			}
-			overallBackupWarnCounter.WithLabelValues(b.Spec.Name, "error").Inc()
-		}
-	}
 }
 
 func mu(a ...interface{}) []interface{} {

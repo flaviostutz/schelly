@@ -36,7 +36,7 @@ func NewHTTPServer(opt0 Options) *HTTPServer {
 
 	logrus.Infof("Initializing HTTP Handlers...")
 	h.setupMaterializedHandlers()
-	h.setupBackupSpecHandlers()
+	// h.setupBackupSpecHandlers()
 
 	return h
 }
@@ -46,4 +46,3 @@ func (s *HTTPServer) Start() error {
 	logrus.Infof("Starting HTTP Server on port 5000")
 	return s.server.ListenAndServe()
 }
-

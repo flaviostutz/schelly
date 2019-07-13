@@ -7,7 +7,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -26,78 +25,122 @@ var invocationHist = prometheus.NewHistogramVec(prometheus.HistogramOpts{
 	"status",
 })
 
-//avoid doing conductor operations in parallel
-var conductorLock = &sync.Mutex{}
+type WorkflowInstance struct {
+	workflowID string
+	status     string
+	dataID     *string
+	dataSizeMB *float64
+	startTime  time.Time
+	endTime    time.Time
+}
+
+var WORKFLOW_CREATE = "create-backup"
+var WORKFLOW_REMOVE = "remove-backup"
 
 func InitConductor() {
 	prometheus.MustRegister(invocationHist)
 }
 
-func launchWorkflow(backupName string) error {
+func launchCreateBackupWorkflow(backupName string) (workflowID string, err error) {
 	logrus.Debugf("startWorkflow backupName=%s", backupName)
 
 	logrus.Debugf("Loading backup definition from DB")
-	bs := getBackupSpec(backupName)
+	bs, err := getBackupSpec(backupName)
+	if err != nil {
+		return "", err
+	}
+
+	if bs.Enabled == 0 {
+		return "", fmt.Errorf("Backup %s cannot be launched because it is not enabled", bs.Name)
+	}
 
 	wf := make(map[string]interface{})
-	wf["name"] = schedule.WorkflowName
-	wf["version"] = schedule.WorkflowVersion
-	wf["input"] = schedule.WorkflowContext
-	wf["input"].(map[string]interface{})["backupName"] = schedule.Name
+	wf["name"] = WORKFLOW_CREATE
+	// wf["version"] = "1.0"
+	mi := make(map[string]interface{})
+	mi["backupName"] = bs.Name
+	wf["input"] = mi
 	wfb, _ := json.Marshal(wf)
 
 	logrus.Debugf("Launching Workflow %s", wf)
-	url := fmt.Sprintf("%s/workflow", conductorURL)
-	resp, data, err := postHTTP(url, wfb)
+	url := fmt.Sprintf("%s/workflow", opt.ConductorAPIURL)
+	resp, data, err := postHTTP(url, wfb, "backup_create")
 	if err != nil {
 		logrus.Errorf("Call to Conductor POST /workflow failed. err=%s", err)
-		return err
+		return "", err
 	}
 	if resp.StatusCode != 200 {
 		logrus.Warnf("POST /workflow call status!=200. resp=%v", resp)
-		return fmt.Errorf("Failed to create new workflow instance. status=%d", resp.StatusCode)
+		return "", fmt.Errorf("Failed to create new workflow instance. status=%d", resp.StatusCode)
 	}
-	logrus.Infof("Schedule %s: Workflow %s launched. workflowId=%s", schedule.Name, schedule.WorkflowName, string(data))
-	return nil
+	logrus.Infof("Workflow %s launched for creating backup %s. workflowId=%s", WORKFLOW_CREATE, backupName, string(data))
+	return string(data), nil
 }
 
-func getWorkflow(name string, version string) (map[string]interface{}, error) {
-	logrus.Debugf("getWorkflow %s", name)
-	resp, data, err := getHTTP(fmt.Sprintf("%s/metadata/workflow/%s?version=%s", conductorURL, name, version))
+func launchRemoveBackupWorkflow(dataID string) (workflowID string, err error) {
+	logrus.Debugf("removeBackupWorkflow dataID=%s", dataID)
+
+	wf := make(map[string]interface{})
+	wf["name"] = WORKFLOW_REMOVE
+	// wf["version"] = "1.0"
+	mi := make(map[string]interface{})
+	mi["dataID"] = dataID
+	wf["input"] = mi
+	wfb, _ := json.Marshal(wf)
+
+	logrus.Debugf("Launching Workflow %s", wf)
+	url := fmt.Sprintf("%s/workflow", opt.ConductorAPIURL)
+	resp, data, err := postHTTP(url, wfb, "backup_remove")
 	if err != nil {
-		return nil, fmt.Errorf("GET /metadata/workflow/name failed. err=%s", err)
+		logrus.Errorf("Call to Conductor POST /workflow failed. err=%s", err)
+		return "", err
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Couldn't get workflow info. name=%s", name)
+		logrus.Warnf("POST /workflow call status!=200. resp=%v", resp)
+		return "", fmt.Errorf("Failed to create new workflow instance. status=%d", resp.StatusCode)
 	}
-	var wfdata map[string]interface{}
-	err = json.Unmarshal(data, &wfdata)
-	if err != nil {
-		logrus.Errorf("Error parsing json. err=%s", err)
-		return nil, err
-	}
-	return wfdata, nil
+
+	workflowID = string(data)
+	logrus.Infof("Workflow %s launched for removing dataID %s. workflowId=%s", WORKFLOW_REMOVE, dataID, workflowID)
+
+	return workflowID, nil
 }
 
-func getWorkflowInstance(workflowID string) (map[string]interface{}, error) {
+func getWorkflowInstance(workflowID string) (WorkflowInstance, error) {
 	logrus.Debugf("getWorkflowInstance %s", workflowID)
-	resp, data, err := getHTTP(fmt.Sprintf("%s/workflow/%s?includeTasks=false", conductorURL, workflowID))
+	wi := WorkflowInstance{}
+	resp, data, err := getHTTP(fmt.Sprintf("%s/workflow/%s?includeTasks=false", opt.ConductorAPIURL, workflowID), "get_workflow")
 	if err != nil {
-		return nil, fmt.Errorf("GET /workflow/%s?includeTasks=false failed. err=%s", err, workflowID)
+		return wi, fmt.Errorf("GET /workflow/%s?includeTasks=false failed. err=%s", err, workflowID)
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("Couldn't get workflow info. workflowId=%s. status=%d", workflowID, resp.StatusCode)
+		return wi, fmt.Errorf("Couldn't get workflow info. workflowId=%s. status=%d", workflowID, resp.StatusCode)
 	}
+
 	var wfdata map[string]interface{}
 	err = json.Unmarshal(data, &wfdata)
 	if err != nil {
 		logrus.Errorf("Error parsing json. err=%s", err)
-		return nil, err
+		return WorkflowInstance{}, err
 	}
-	return wfdata, nil
+	wi.workflowID = wfdata["id"].(string)
+	wi.status = wfdata["status"].(string)
+	out, exists := wfdata["output"]
+	if exists {
+		wfoutput := out.(map[string]interface{})
+		did, ex := wfoutput["dataId"]
+		if ex {
+			a := did.(string)
+			wi.dataID = &a
+		}
+	}
+	//FIXME
+	wi.startTime = wfdata["startTime"].(time.Time)
+	wi.endTime = wfdata["endTime"].(time.Time)
+	return wi, nil
 }
 
-func findWorkflows(backupName string, running bool) (map[string]interface{}, error) {
+func findWorkflows(backupName string, running bool) (hits int, result map[string]interface{}, err error) {
 	logrus.Debugf("findWorkflows %s", backupName)
 	runstr := ""
 	if running {
@@ -106,113 +149,27 @@ func findWorkflows(backupName string, running bool) (map[string]interface{}, err
 		runstr = " AND NOT status=RUNNING"
 	}
 	freeText := fmt.Sprintf("backupName=%s%s", backupName, runstr)
-	sr := fmt.Sprintf("%s/workflow/search?freeText=%s&sort=endTime:DESC&size=5", conductorURL, url.QueryEscape(freeText))
+	sr := fmt.Sprintf("%s/workflow/search?freeText=%s&sort=endTime:DESC&size=5", opt.ConductorAPIURL, url.QueryEscape(freeText))
 	// logrus.Debugf("WORKFLOW SEARCH URL=%s", sr)
-	resp, data, err := getHTTP(sr)
+	resp, data, err := getHTTP(sr, "list_workflows")
 	if err != nil {
-		return nil, fmt.Errorf("GET /workflow/search failed. err=%s", err)
+		return 0, nil, fmt.Errorf("GET /workflow/search failed. err=%s", err)
 	}
 	if resp.StatusCode != 200 {
-		return nil, fmt.Errorf("GET /workflow/search failed. status=%d. err=%s", resp.StatusCode, err)
+		return 0, nil, fmt.Errorf("GET /workflow/search failed. status=%d. err=%s", resp.StatusCode, err)
 	}
 	var wfdata map[string]interface{}
 	err = json.Unmarshal(data, &wfdata)
 	if err != nil {
 		logrus.Errorf("Error parsing json. err=%s", err)
-		return nil, err
+		return 0, nil, err
 	}
-	return wfdata, nil
+	hits = int(wfdata["totalHits"].(float64))
+	return hits, wfdata, nil
 }
 
-func getWebhookBackupInfo(backupID string) (ResponseWebhook, error) {
-	logrus.Debugf("getWebhookBackupInfo %s - waiting lock", backupID)
-	webhookLock.Lock()
-	defer webhookLock.Unlock()
-	logrus.Debugf("getWebhookBackupInfo %s - acquired lock", backupID)
-	logrus.Debug(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
-	start := time.Now()
-	resp, data, err := getHTTP(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
-	if err != nil {
-		logrus.Errorf("Webhook GET backup status invocation failed. err=%s", err)
-		invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
-		return ResponseWebhook{}, fmt.Errorf("Webhook GET backup status invocation failed. err=%s", err)
-	}
-	if resp.StatusCode == 200 {
-		var respData ResponseWebhook
-		err = json.Unmarshal(data, &respData)
-		if err != nil {
-			logrus.Errorf("Error parsing json. err=%s", err)
-			invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
-			return ResponseWebhook{}, err
-		} else {
-			invocationHist.WithLabelValues("info", "success").Observe(float64(time.Since(start).Seconds()))
-			return respData, nil
-		}
-	} else {
-		logrus.Warnf("Webhook status != 200 resp=%s", resp)
-		invocationHist.WithLabelValues("info", "error").Observe(float64(time.Since(start).Seconds()))
-		return ResponseWebhook{}, fmt.Errorf("Couldn't get backup info")
-	}
-}
-
-func createWebhookBackup() (ResponseWebhook, error) {
-	logrus.Debugf("createWebhookBackup - waiting lock")
-	webhookLock.Lock()
-	defer webhookLock.Unlock()
-	logrus.Debugf("createWebhookBackup - acquired lock")
-	start := time.Now()
-	resp, data, err := postHTTP(options.WebhookURL, options.WebhookCreateBody)
-	if err != nil {
-		logrus.Errorf("Webhook POST new backup invocation failed. err=%s", err)
-		invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
-		return ResponseWebhook{}, err
-	}
-	if resp.StatusCode == 202 {
-		var respData ResponseWebhook
-		err = json.Unmarshal(data, &respData)
-		if err != nil {
-			logrus.Errorf("Error parsing json. err=%s", err)
-			invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
-			return ResponseWebhook{}, fmt.Errorf("Error parsing json. err=%s", err)
-		} else {
-			invocationHist.WithLabelValues("create", "success").Observe(float64(time.Since(start).Seconds()))
-			return respData, nil
-		}
-	} else {
-		logrus.Warnf("Webhook status != 202. resp=%s", resp)
-		invocationHist.WithLabelValues("create", "error").Observe(float64(time.Since(start).Seconds()))
-		return ResponseWebhook{}, fmt.Errorf("Failed to create backup. response")
-	}
-}
-
-func deleteWebhookBackup(backupID string) error {
-	logrus.Debugf("deleteWebhookBackup %s - waiting lock", backupID)
-	webhookLock.Lock()
-	defer webhookLock.Unlock()
-	logrus.Debugf("deleteWebhookBackup %s - acquired lock", backupID)
-	start := time.Now()
-	resp, _, err := deleteHTTP(fmt.Sprintf("%s/%s", options.WebhookURL, backupID))
-	if err != nil {
-		logrus.Errorf("Webhook DELETE backup invocation failed. err=%s", err)
-		invocationHist.WithLabelValues("delete", "error").Observe(float64(time.Since(start).Seconds()))
-		return err
-	}
-	if resp.StatusCode == 200 {
-		logrus.Debugf("Webhook DELETE successful")
-		invocationHist.WithLabelValues("delete", "success").Observe(float64(time.Since(start).Seconds()))
-		return nil
-	} else if resp.StatusCode == 404 {
-		logrus.Warnf("Webhook DELETE appears to be successful. Return was 404 NOT FOUND.")
-		invocationHist.WithLabelValues("delete", "success").Observe(float64(time.Since(start).Seconds()))
-		return nil
-	} else {
-		logrus.Warnf("Webhook status != 200. resp=%s", resp)
-		invocationHist.WithLabelValues("delete", "error").Observe(float64(time.Since(start).Seconds()))
-		return fmt.Errorf("Webhook status != 200. resp=%v", resp)
-	}
-}
-
-func postHTTP(url string, data []byte) (http.Response, []byte, error) {
+func postHTTP(url string, data []byte, metricsInfo string) (http.Response, []byte, error) {
+	startTime := time.Now()
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
@@ -233,10 +190,17 @@ func postHTTP(url string, data []byte) (http.Response, []byte, error) {
 	logrus.Debugf("Response: %v", response)
 	datar, _ := ioutil.ReadAll(response.Body)
 	logrus.Debugf("Response body: %s", datar)
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		logrus.Debugf("%s status code not ok. status_code=%d", metricsInfo, response.StatusCode)
+	}
+	invocationHist.WithLabelValues(metricsInfo, fmt.Sprintf("%d", response.StatusCode)).Observe(float64(time.Since(startTime).Seconds()))
+
 	return *response, datar, nil
 }
 
-func getHTTP(url0 string) (http.Response, []byte, error) {
+func getHTTP(url0 string, metricsInfo string) (http.Response, []byte, error) {
+	startTime := time.Now()
 	req, err := http.NewRequest("GET", url0, nil)
 	if err != nil {
 		logrus.Errorf("HTTP request creation failed. err=%s", err)
@@ -250,11 +214,18 @@ func getHTTP(url0 string) (http.Response, []byte, error) {
 	response, err1 := client.Do(req)
 	if err1 != nil {
 		logrus.Errorf("HTTP request invocation failed. err=%s", err1)
+		invocationHist.WithLabelValues(metricsInfo, "error").Observe(float64(time.Since(startTime).Seconds()))
 		return http.Response{}, []byte{}, err1
 	}
 
 	// logrus.Debugf("Response: %v", response)
 	datar, _ := ioutil.ReadAll(response.Body)
 	logrus.Debugf("Response body: %s", datar)
+
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		logrus.Debugf("%s status code not ok. status_code=%d", metricsInfo, response.StatusCode)
+	}
+	invocationHist.WithLabelValues(metricsInfo, fmt.Sprintf("%d", response.StatusCode)).Observe(float64(time.Since(startTime).Seconds()))
+
 	return *response, datar, nil
 }
