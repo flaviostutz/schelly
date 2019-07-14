@@ -67,58 +67,13 @@ var overallBackupWarnCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
 	"status",
 })
 
-type BackupTask struct {
-	backupName string
-	running    bool
-}
-
-func newBackupTask(backupName string) BackupTask {
-	if !metricsInitialized {
-		prometheus.MustRegister(backupLastSizeGauge)
-		prometheus.MustRegister(backupLastTimeGauge)
-		prometheus.MustRegister(backupTasksCounter)
-		prometheus.MustRegister(backupMaterializedCounter)
-		prometheus.MustRegister(backupTagCounter)
-		prometheus.MustRegister(overallBackupWarnCounter)
-		metricsInitialized = true
-	}
-	return BackupTask{backupName, false}
-}
-
-func (b *BackupTask) runBackupTask() {
-	if b.running {
-		logrus.Debug("runBackupTask already running. skipping new task creation")
-		backupTasksCounter.WithLabelValues(b.backupName, "skipped").Inc()
-		overallBackupWarnCounter.WithLabelValues(b.backupName, "warning").Inc()
-		return
-	}
-
-	b.running = true
-	backupTasksCounter.WithLabelValues(b.backupName, "run").Inc()
-
-	start := time.Now()
-
-	for b.running {
-		elapsed := time.Now().Sub(start)
-		wid, err := triggerNewBackup(b.backupName)
-		if err != nil {
-			// if elapsed.Seconds() < float64(b.Spec.TimeoutSeconds)/2.0 {
-			logrus.Errorf("Error launching backup workflow for backup %s. Retrying in 5 seconds. err=%s", b.backupName, err)
-			time.Sleep(5 * time.Second)
-			backupTriggerCounter.WithLabelValues(b.backupName, "retry").Inc()
-			overallBackupWarnCounter.WithLabelValues(b.backupName, "warning").Inc()
-			// } else {
-			// logrus.Errorf("Error triggering backup. Won't retry anymore. err=%s", err)
-			// b.running = false
-			// backupTriggerCounter.WithLabelValues(b.backupName, "error").Inc()
-			// overallBackupWarnCounter.WithLabelValues(b.backupName, "error").Inc()
-			// }
-		} else {
-			logrus.Infof("Backup launched. elapsed=%s. workflowId=%s", elapsed, wid)
-			b.running = false
-			backupTriggerCounter.WithLabelValues(b.backupName, "success").Inc()
-		}
-	}
+func InitTaskBackup() {
+	prometheus.MustRegister(backupLastSizeGauge)
+	prometheus.MustRegister(backupLastTimeGauge)
+	prometheus.MustRegister(backupTasksCounter)
+	prometheus.MustRegister(backupMaterializedCounter)
+	prometheus.MustRegister(backupTagCounter)
+	prometheus.MustRegister(overallBackupWarnCounter)
 }
 
 func triggerNewBackup(backupName string) (workflowID string, err3 error) {
@@ -178,19 +133,7 @@ func checkBackupWorkflow(backupName string) {
 	}
 
 	if wf.status == "running" {
-		if time.Now().Sub(wf.startTime).Seconds() > float64(bs.TimeoutSeconds) {
-			logrus.Warnf("Backup %s timeout. Check conductor workflow", backupName)
-			// logrus.Warnf("Backup %s timeout. Cancelling backup...", backupName)
-			// logrus.Debugf("Invoking POST '%s' so that a new backup will be created", opt.ConductorAPIURL)
-			// workflowID, err1 := launchWorkflow(backupName, WORKFLOW_CANCEL)
-			// if err1 != nil {
-			// 	overallBackupWarnCounter.WithLabelValues(backupName, "error").Inc()
-			// 	return fmt.Errorf("Couldn't invoke Conductor workflow for backup creation. err=%s", err1)
-			// }
-			// logrus.Infof("Backup %s cancel workflow launched successfuly", backupName)
-			// // setCurrentTaskStatus(backupID, "cancelled", backupDate)
-			// overallBackupWarnCounter.WithLabelValues(backupName, "timeout").Inc()
-		}
+		logrus.Debugf("Workflow %s launched for backup %s is still running", wf.workflowID, backupName)
 		return
 	}
 

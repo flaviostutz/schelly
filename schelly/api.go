@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/sirupsen/logrus"
 
 	cors "github.com/itsjamie/gin-cors"
@@ -15,9 +16,16 @@ type HTTPServer struct {
 	router *gin.Engine
 }
 
-func NewHTTPServer(opt0 Options) *HTTPServer {
+var apiInvocationsCounter = prometheus.NewCounterVec(prometheus.CounterOpts{
+	Name: "schelly_api_invocations_total",
+	Help: "Total api requests served",
+}, []string{
+	"entity",
+	"status",
+})
+
+func NewHTTPServer() *HTTPServer {
 	router := gin.Default()
-	opt = opt0
 
 	router.Use(cors.Middleware(cors.Config{
 		Origins:         "*",
@@ -34,9 +42,11 @@ func NewHTTPServer(opt0 Options) *HTTPServer {
 		Handler: router,
 	}, router: router}
 
+	prometheus.MustRegister(apiInvocationsCounter)
+
 	logrus.Infof("Initializing HTTP Handlers...")
 	h.setupMaterializedHandlers()
-	// h.setupBackupSpecHandlers()
+	h.setupBackupSpecHandlers()
 
 	return h
 }

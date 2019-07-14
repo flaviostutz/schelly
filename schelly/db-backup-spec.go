@@ -11,39 +11,35 @@ import (
 
 //BackupSpec bs
 type BackupSpec struct {
-	Name                string     `json:"name,omitempty"`
-	Enabled             int        `json:"enabled,omitempty"`
-	RunningWorkflowID   *string    `json:"runningWorkflowId,omitempty"`
-	BackupCronString    *string    `json:"backupCronString,omitempty"`
-	RetentionCronString *string    `json:"retentionCronString,omitempty"`
-	TimeoutSeconds      int        `json:"timeoutSeconds,omitempty"`
-	CheckWarningSeconds int        `json:"checkWarningSeconds,omitempty"`
-	FromDate            *time.Time `json:"fromDate,omitempty"`
-	ToDate              *time.Time `json:"toDate,omitempty"`
-	LastUpdate          time.Time  `json:"lastUpdate,omitempty"`
-	RetentionMinutely   string     `json:"retentionMinutely,omitempty"`
-	RetentionHourly     string     `json:"retentionHourly,omitempty"`
-	RetentionDaily      string     `json:"retentionDaily,omitempty"`
-	RetentionWeekly     string     `json:"retentionWeekly,omitempty"`
-	RetentionMonthly    string     `json:"retentionMonthly,omitempty"`
-	RetentionYearly     string     `json:"retentionYearly,omitempty"`
-	// RunningWorkflowID   *string    `json:"runningWorkflowId,omitempty"`
+	Name              string     `json:"name,omitempty"`
+	Enabled           int        `json:"enabled,omitempty"`
+	RunningWorkflowID *string    `json:"runningWorkflowId,omitempty"`
+	BackupCronString  *string    `json:"backupCronString,omitempty"`
+	FromDate          *time.Time `json:"fromDate,omitempty"`
+	ToDate            *time.Time `json:"toDate,omitempty"`
+	LastUpdate        time.Time  `json:"lastUpdate,omitempty"`
+	RetentionMinutely string     `json:"retentionMinutely,omitempty"`
+	RetentionHourly   string     `json:"retentionHourly,omitempty"`
+	RetentionDaily    string     `json:"retentionDaily,omitempty"`
+	RetentionWeekly   string     `json:"retentionWeekly,omitempty"`
+	RetentionMonthly  string     `json:"retentionMonthly,omitempty"`
+	RetentionYearly   string     `json:"retentionYearly,omitempty"`
 }
 
 func createBackupSpec(bs BackupSpec) error {
 	stmt, err1 := db.Prepare(`INSERT INTO backup_spec (
-								name, enabled, running_workflow_id, timeout_seconds, 
-								check_warning_seconds, from_date, to_date, last_update, 
+								name, enabled, running_workflow_id,
+								from_date, to_date, last_update, 
 								retention_minutely, retention_hourly, retention_daily, retention_weekly, 
 								retention_monthly, retention_yearly, backup_cron_string, retention_cron_string
 							) values(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
 	if err1 != nil {
 		return err1
 	}
-	_, err2 := stmt.Exec(bs.Name, bs.Enabled, bs.RunningWorkflowID, bs.TimeoutSeconds,
-		bs.CheckWarningSeconds, bs.FromDate, bs.ToDate, bs.LastUpdate,
+	_, err2 := stmt.Exec(bs.Name, bs.Enabled, bs.RunningWorkflowID,
+		bs.FromDate, bs.ToDate, bs.LastUpdate,
 		bs.RetentionMinutely, bs.RetentionHourly, bs.RetentionDaily, bs.RetentionWeekly,
-		bs.RetentionMonthly, bs.RetentionYearly, bs.BackupCronString, bs.RetentionCronString)
+		bs.RetentionMonthly, bs.RetentionYearly, bs.BackupCronString)
 	if err2 != nil {
 		return err2
 	}
@@ -52,18 +48,18 @@ func createBackupSpec(bs BackupSpec) error {
 
 func updateBackupSpec(bs BackupSpec) error {
 	stmt, err1 := db.Prepare(`UPDATE backup_spec SET
-								name=?, enabled=?, running_workflow_id=?, timeout_seconds=?, 
-								check_warning_seconds=?, from_date=?, to_date=?, last_update=?, 
+								name=?, enabled=?, running_workflow_id=?,
+								from_date=?, to_date=?, last_update=?, 
 								retention_minutely=?, retention_hourly=?, retention_daily=?, retention_weekly=?, 
-								retention_monthly=?, retention_yearly=?, backup_cron_string=?, retention_cron_string=?
+								retention_monthly=?, retention_yearly=?, backup_cron_string=?
 							  WHERE name='` + bs.Name + `'`)
 	if err1 != nil {
 		return err1
 	}
-	_, err2 := stmt.Exec(bs.Name, bs.Enabled, bs.RunningWorkflowID, bs.TimeoutSeconds,
-		bs.CheckWarningSeconds, bs.FromDate, bs.ToDate, bs.LastUpdate,
+	_, err2 := stmt.Exec(bs.Name, bs.Enabled, bs.RunningWorkflowID,
+		bs.FromDate, bs.ToDate, bs.LastUpdate,
 		bs.RetentionMinutely, bs.RetentionHourly, bs.RetentionDaily, bs.RetentionWeekly,
-		bs.RetentionMonthly, bs.RetentionYearly, bs.BackupCronString, bs.RetentionCronString)
+		bs.RetentionMonthly, bs.RetentionYearly, bs.BackupCronString)
 	if err2 != nil {
 		return err2
 	}
@@ -72,11 +68,10 @@ func updateBackupSpec(bs BackupSpec) error {
 
 func getBackupSpec(backupName string) (BackupSpec, error) {
 	rows, err1 := db.Query(`SELECT 
-			name, enabled, running_workflow_id, timeout_seconds, 
-			check_warning_seconds, from_date, to_date, last_update, 
+			name, enabled, running_workflow_id,
+			from_date, to_date, last_update, 
 			retention_minutely, retention_hourly, retention_daily, retention_weekly, 
-			retention_monthly, retention_yearly, 
-			backup_cron_string, retention_cron_string
+			retention_monthly, retention_yearly, backup_cron_string
 			FROM backup_spec WHERE name='` + backupName + `'`)
 	if err1 != nil {
 		return BackupSpec{}, err1
@@ -85,11 +80,10 @@ func getBackupSpec(backupName string) (BackupSpec, error) {
 
 	for rows.Next() {
 		b := BackupSpec{}
-		err2 := rows.Scan(&b.Name, &b.Enabled, &b.RunningWorkflowID, &b.TimeoutSeconds,
-			&b.CheckWarningSeconds, &b.FromDate, &b.ToDate, &b.LastUpdate,
+		err2 := rows.Scan(&b.Name, &b.Enabled, &b.RunningWorkflowID,
+			&b.FromDate, &b.ToDate, &b.LastUpdate,
 			&b.RetentionMinutely, &b.RetentionHourly, &b.RetentionDaily, &b.RetentionWeekly,
-			&b.RetentionMonthly, &b.RetentionYearly,
-			&b.BackupCronString, &b.RetentionCronString)
+			&b.RetentionMonthly, &b.RetentionYearly, &b.BackupCronString)
 		if err2 != nil {
 			return BackupSpec{}, err2
 		}
@@ -102,17 +96,16 @@ func getBackupSpec(backupName string) (BackupSpec, error) {
 	return BackupSpec{}, fmt.Errorf("Backup spec name %s not found", backupName)
 }
 
-func listBackupSpecs(status string) ([]BackupSpec, error) {
+func listBackupSpecs(enabled *int) ([]BackupSpec, error) {
 	where := ""
-	if status != "" {
-		where = "WHERE status='" + status + "'"
+	if enabled != nil {
+		where = fmt.Sprintf("WHERE enabled=%d", enabled)
 	}
 	q := `SELECT 
-			name, enabled, running_workflow_id, timeout_seconds, 
-			check_warning_seconds, from_date, to_date, last_update, 
+			name, enabled, running_workflow_id,
+			from_date, to_date, last_update, 
 			retention_minutely, retention_hourly, retention_daily, retention_weekly, 
-			retention_monthly, retention_yearly
-			backup_cron_string, retention_cron_string
+			retention_monthly, retention_yearly, backup_cron_string
 		FROM backup_spec ` + where + ` ORDER BY name`
 
 	logrus.Debugf("query=%s", q)
@@ -125,11 +118,10 @@ func listBackupSpecs(status string) ([]BackupSpec, error) {
 	var backups = make([]BackupSpec, 0)
 	for rows.Next() {
 		b := BackupSpec{}
-		err2 := rows.Scan(&b.Name, &b.Enabled, &b.RunningWorkflowID, &b.TimeoutSeconds,
-			&b.CheckWarningSeconds, &b.FromDate, &b.ToDate, &b.LastUpdate,
+		err2 := rows.Scan(&b.Name, &b.Enabled, &b.RunningWorkflowID,
+			&b.FromDate, &b.ToDate, &b.LastUpdate,
 			&b.RetentionMinutely, &b.RetentionHourly, &b.RetentionDaily, &b.RetentionWeekly,
-			&b.RetentionMonthly, &b.RetentionYearly,
-			&b.BackupCronString, &b.RetentionCronString)
+			&b.RetentionMonthly, &b.RetentionYearly, &b.BackupCronString)
 		if err2 != nil {
 			return []BackupSpec{}, err2
 		}
