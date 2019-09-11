@@ -15,7 +15,7 @@ import (
 	_ "strings"
 	_ "time"
 
-	_ "github.com/Sirupsen/logrus"
+	_ "github.com/sirupsen/logrus"
 	_ "github.com/gorilla/mux"
 	_ "github.com/mattn/go-sqlite3"
 	_ "github.com/prometheus/client_golang/prometheus"

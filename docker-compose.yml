@@ -16,7 +16,7 @@ services:
       - WEBHOOK_HEADERS=k1=v1,k2=v2
       # - WEBHOOK_CREATE_BODY=""
       # - WEBHOOK_DELETE_BODY=""
-      - WEBHOOK_GRACE_TIME=30
+      - WEBHOOK_GRACE_TIME=200
       - RETENTION_MINUTELY=10
       # - RETENTION_HOURLY=""
       # - RETENTION_DAILY=""
@@ -35,6 +35,7 @@ services:
       - POST_BACKUP_COMMAND=rm /backup-source/TESTFILE
       - SOURCE_DATA_PATH=/backup-source/TESTFILE
       - TARGET_DATA_PATH=/backup-repo
+
 
 networks:
   default:

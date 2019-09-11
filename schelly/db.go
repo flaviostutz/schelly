@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus"
 )
