@@ -1,17 +1,24 @@
-FROM golang:1.10 AS BUILD
+FROM golang:1.12.3 AS BUILD
 
 #doing dependency build separated from source build optimizes time for developer, but is not required
 #install external dependencies first
-ADD /main.go $GOPATH/src/schelly/main.go
-RUN go get github.com/stretchr/testify
-RUN go get -v schelly
+# ADD /main.go $GOPATH/src/schelly/main.go
+# RUN go get github.com/stretchr/testify
+# RUN go get -v schelly
+
+WORKDIR /schelly
+
+ADD go* ./
+RUN go mod download
+ADD schelly/ ./
 
 #now build source code
-ADD schelly $GOPATH/src/schelly
-RUN go get -v schelly
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -ldflags '-extldflags "-static"' -o /go/bin/schelly .
 
+# ADD schelly $GOPATH/src/schelly
+# RUN go get -v schelly
 
-FROM golang:1.10 AS IMAGE
+FROM golang:1.12.3 AS IMAGE
 
 VOLUME [ "/var/lib/schelly/data" ]
 
