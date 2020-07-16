@@ -1,4 +1,7 @@
 # schelly
+
+[<img src="https://img.shields.io/docker/automated/flaviostutz/schelly"/>](https://hub.docker.com/r/flaviostutz/schelly)
+
 Schelly is a backup tool focused on the scheduling part of a common backup routine, leaving the dirty job for specialized storage/database tools as it should. You can use any backup backend by just implementing a simple REST API specified here. This schelly compatible backup backend is called a **Backup Provider**.
 
 **For more complex use cases, use http://github.com/flaviostutz/backtor. It uses Conductor for scheduling tasks, so you will have much more control and a better tooling.**
