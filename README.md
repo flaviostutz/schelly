@@ -1,6 +1,7 @@
 # schelly
 
-[<img src="https://img.shields.io/docker/automated/flaviostutz/schelly"/>](https://hub.docker.com/r/flaviostutz/schelly)
+[<img src="https://img.shields.io/docker/automated/flaviostutz/schelly"/>](https://hub.docker.com/r/flaviostutz/schelly)<br/>
+[<img src="https://goreportcard.com/badge/github.com/flaviostutz/schelly"/>](https://goreportcard.com/report/github.com/flaviostutz/schelly)
 
 Schelly is a backup tool focused on the scheduling part of a common backup routine, leaving the dirty job for specialized storage/database tools as it should. You can use any backup backend by just implementing a simple REST API specified here. This schelly compatible backup backend is called a **Backup Provider**.
 
